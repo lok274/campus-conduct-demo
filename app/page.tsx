@@ -7,10 +7,16 @@ type Page = "dashboard" | "students" | "records";
 type Kind = "嘉許" | "提醒" | "違規";
 type Status = "待跟進" | "跟進中" | "已結案";
 type Student = { id: string; name: string; className: string; seat: string; number: string };
-type FollowUp = { id: string; date: string; author: string; note: string };
+type FollowUp = { id: string; date: string; at?: string; author: string; note: string; type?: "follow-up" | "reopened" };
+type Closure = { id: string; date: string; at?: string; summary: string };
+type TimelineEvent = {
+  id: string; caseId: string; date: string; at?: string; order: number;
+  type: "record" | "follow-up" | "closed" | "reopened";
+  kind: Kind; category: string; detail: string; status: Status; author?: string;
+};
 type Entry = {
   id: string; studentId: string; kind: Kind; category: string; date: string; note: string; status: Status;
-  assignee?: string; dueDate?: string; followUps?: FollowUp[]; resolution?: string; closedAt?: string;
+  assignee?: string; dueDate?: string; followUps?: FollowUp[]; resolution?: string; closedAt?: string; closureHistory?: Closure[];
 };
 type Draft = Pick<Entry, "studentId" | "kind" | "category" | "date" | "note" | "status">;
 
@@ -32,6 +38,7 @@ const initialEntries: Entry[] = [
   { id: "r5", studentId: "s5", kind: "嘉許", category: "服務精神", date: "2026-09-14", note: "活動後協助清理場地。", status: "已結案" },
   { id: "r6", studentId: "s3", kind: "提醒", category: "守時", date: "2026-09-13", note: "早會遲到，已了解原因並提醒。", status: "已結案" },
   { id: "r7", studentId: "s6", kind: "嘉許", category: "積極參與", date: "2026-09-12", note: "積極參與校園義工服務。", status: "已結案" },
+  { id: "r8", studentId: "s4", kind: "嘉許", category: "熱心助人", date: "2026-09-10", note: "主動協助同學整理課堂筆記。", status: "已結案", resolution: "已在班會上作出嘉許。", closedAt: "2026-09-11", closureHistory: [{ id: "c1", date: "2026-09-11", summary: "已在班會上作出嘉許。" }] },
 ];
 const categories: Record<Kind, string[]> = {
   嘉許: ["服務精神", "熱心助人", "積極參與", "其他嘉許"],
@@ -43,6 +50,21 @@ const newDraft = (): Draft => ({
   date: new Date().toLocaleDateString("sv-SE"), note: "", status: "待跟進",
 });
 const dateLabel = (date: string) => date.replaceAll("-", "/");
+function buildStudentTimeline(entries: Entry[]): TimelineEvent[] {
+  const events: TimelineEvent[] = [];
+  for (const entry of entries) {
+    const shared = { caseId: entry.id, kind: entry.kind, category: entry.category, status: entry.status };
+    events.push({ ...shared, id: entry.id + "-record", date: entry.date, order: 0, type: "record", detail: entry.note });
+    for (const item of entry.followUps ?? []) {
+      events.push({ ...shared, id: entry.id + "-" + item.id, date: item.date, at: item.at, order: item.type === "reopened" ? 3 : 1, type: item.type ?? "follow-up", detail: item.note, author: item.author });
+    }
+    const closures = entry.closureHistory ?? (entry.closedAt && entry.resolution ? [{ id: "current", date: entry.closedAt, summary: entry.resolution }] : []);
+    for (const item of closures) {
+      events.push({ ...shared, id: entry.id + "-" + item.id, date: item.date, at: item.at, order: 2, type: "closed", detail: item.summary });
+    }
+  }
+  return events.sort((a, b) => b.date.localeCompare(a.date) || (b.at ?? "").localeCompare(a.at ?? "") || b.order - a.order || a.id.localeCompare(b.id));
+}
 const nav: { id: Page; text: string; Icon: typeof LayoutDashboard }[] = [
   { id: "dashboard", text: "總覽", Icon: LayoutDashboard },
   { id: "students", text: "學生名冊", Icon: UsersRound },
@@ -66,6 +88,7 @@ export default function Home() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [studentId, setStudentId] = useState<string | null>(null);
   const [caseId, setCaseId] = useState<string | null>(null);
+  const [caseReturnStudentId, setCaseReturnStudentId] = useState<string | null>(null);
   const [formOpen, setFormOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draft, setDraft] = useState<Draft>(newDraft);
@@ -79,11 +102,15 @@ export default function Home() {
   useEffect(() => {
     if (!formOpen && !studentId && !caseId) return;
     const close = (event: KeyboardEvent) => {
-      if (event.key === "Escape") { setFormOpen(false); setStudentId(null); setCaseId(null); }
+      if (event.key === "Escape") {
+        if (formOpen) setFormOpen(false);
+        else if (caseId) { setCaseId(null); setStudentId(caseReturnStudentId); setCaseReturnStudentId(null); }
+        else setStudentId(null);
+      }
     };
     window.addEventListener("keydown", close);
     return () => window.removeEventListener("keydown", close);
-  }, [formOpen, studentId, caseId]);
+  }, [formOpen, studentId, caseId, caseReturnStudentId]);
 
   const studentMap = useMemo(() => new Map(students.map((s) => [s.id, s])), []);
   const pending = entries.filter((e) => e.status !== "已結案");
@@ -102,6 +129,7 @@ export default function Home() {
   }).sort((a, b) => b.date.localeCompare(a.date));
   const selected = studentId ? studentMap.get(studentId) : undefined;
   const selectedEntries = selected ? entries.filter((e) => e.studentId === selected.id) : [];
+  const selectedTimeline = buildStudentTimeline(selectedEntries);
   const draftStudent = studentMap.get(draft.studentId) ?? students[0];
   const draftClassStudents = students.filter((s) => s.className === draftStudent.className);
   const selectedCase = caseId ? entries.find((e) => e.id === caseId) : undefined;
@@ -110,12 +138,12 @@ export default function Home() {
   function navigate(next: Page) { setPage(next); setSearch(""); setMenuOpen(false); }
   function addEntry(id?: string) {
     setEditingId(null); setDraft({ ...newDraft(), studentId: id || students[0].id });
-    setStudentId(null); setCaseId(null); setFormOpen(true);
+    setStudentId(null); setCaseId(null); setCaseReturnStudentId(null); setFormOpen(true);
   }
   function editEntry(entry: Entry) {
     setEditingId(entry.id);
     setDraft({ studentId: entry.studentId, kind: entry.kind, category: entry.category, date: entry.date, note: entry.note, status: entry.status });
-    setStudentId(null); setCaseId(null); setFormOpen(true);
+    setStudentId(null); setCaseId(null); setCaseReturnStudentId(null); setFormOpen(true);
   }
   function saveEntry(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -132,7 +160,11 @@ export default function Home() {
     setFormOpen(false); navigate("records");
   }
   function openCase(id: string) {
+    setCaseReturnStudentId(studentId);
     setStudentId(null); setFormOpen(false); setCaseId(id);
+  }
+  function closeCaseView() {
+    setCaseId(null); setStudentId(caseReturnStudentId); setCaseReturnStudentId(null);
   }
   function saveCasePlan(id: string, assignee: string, dueDate: string) {
     setEntries((current) => current.map((e) => e.id === id ? { ...e, assignee: assignee.trim(), dueDate } : e));
@@ -144,20 +176,24 @@ export default function Home() {
   }
   function addFollowUp(id: string, note: string) {
     const trimmed = note.trim(); if (!trimmed) return;
-    const item: FollowUp = { id: "f" + Date.now(), date: new Date().toLocaleDateString("sv-SE"), author: "訓育組", note: trimmed };
+    const now = new Date();
+    const item: FollowUp = { id: "f" + now.getTime(), date: now.toLocaleDateString("sv-SE"), at: now.toISOString(), author: "訓育組", note: trimmed };
     setEntries((current) => current.map((e) => e.id === id && e.status !== "已結案" ? { ...e, status: "跟進中", followUps: [...(e.followUps ?? []), item] } : e));
     setNotice("跟進記錄已加入");
   }
   function closeCase(id: string, summary: string) {
     const trimmed = summary.trim(); if (!trimmed) return;
-    setEntries((current) => current.map((e) => e.id === id && e.status !== "已結案" ? { ...e, status: "已結案", resolution: trimmed, closedAt: new Date().toLocaleDateString("sv-SE") } : e));
+    const now = new Date();
+    const closure: Closure = { id: "c" + now.getTime(), date: now.toLocaleDateString("sv-SE"), at: now.toISOString(), summary: trimmed };
+    setEntries((current) => current.map((e) => e.id === id && e.status !== "已結案" ? { ...e, status: "已結案", resolution: trimmed, closedAt: closure.date, closureHistory: [...(e.closureHistory ?? []), closure] } : e));
     setNotice("個案已結案");
   }
   function reopenCase(id: string) {
+    const now = new Date();
     setEntries((current) => current.map((e) => e.id === id && e.status === "已結案" ? {
       ...e, status: "跟進中", resolution: undefined, closedAt: undefined,
       followUps: [...(e.followUps ?? []), {
-        id: "f" + Date.now(), date: new Date().toLocaleDateString("sv-SE"),
+        id: "f" + now.getTime(), date: now.toLocaleDateString("sv-SE"), at: now.toISOString(), type: "reopened",
         author: "訓育組", note: "重新開啟個案。前次結案摘要：" + (e.resolution ?? "未提供"),
       }],
     } : e));
@@ -196,11 +232,32 @@ export default function Home() {
         <footer>校園訓育系統 · 前端介面示範 <span>所有學生及紀錄均為虛構資料</span></footer>
       </main>
     </div>
-    {selected && <div className="overlay" onMouseDown={(e) => { if (e.target === e.currentTarget) setStudentId(null); }}><section className="panel" role="dialog" aria-modal="true" aria-labelledby="student-title"><div className="panel-head"><div><small>STUDENT PROFILE</small><h2 id="student-title">學生資料</h2></div><button type="button" aria-label="關閉學生資料" onClick={() => setStudentId(null)}><X size={20}/></button></div><div className="panel-body"><div className="profile"><Avatar student={selected} large/><div><h3>{selected.name}</h3><p>{selected.className} · 座號 {selected.seat}</p></div></div><div className="profile-facts"><div><span>學號</span><strong>{selected.number}</strong></div><div><span>班級</span><strong>{selected.className}</strong></div><div><span>紀錄總數</span><strong>{selectedEntries.length} 筆</strong></div></div><h3 className="block-title">訓育紀錄 <span>{selectedEntries.length} 筆</span></h3>{selectedEntries.length ? selectedEntries.map((e) => <article className="profile-entry" key={e.id}><div><KindTag kind={e.kind}/><small>{dateLabel(e.date)}</small></div><strong>{e.category}</strong><p>{e.note}</p><div className="profile-entry-bottom"><StatusTag status={e.status}/><button type="button" className="row-button" onClick={() => openCase(e.id)}>查看個案 <ChevronRight size={14}/></button></div></article>) : <p className="empty-inline">目前沒有訓育紀錄。</p>}</div><div className="panel-foot"><button type="button" className="btn primary wide" onClick={() => addEntry(selected.id)}><Plus size={17}/>為此學生新增紀錄</button></div></section></div>}
+    {selected && <div className="overlay" onMouseDown={(e) => { if (e.target === e.currentTarget) setStudentId(null); }}><section className="panel" role="dialog" aria-modal="true" aria-labelledby="student-title"><div className="panel-head"><div><small>STUDENT PROFILE</small><h2 id="student-title">學生資料</h2></div><button type="button" aria-label="關閉學生資料" onClick={() => setStudentId(null)}><X size={20}/></button></div><div className="panel-body"><div className="profile"><Avatar student={selected} large/><div><h3>{selected.name}</h3><p>{selected.className} · 座號 {selected.seat}</p></div></div><div className="profile-facts"><div><span>學號</span><strong>{selected.number}</strong></div><div><span>班級</span><strong>{selected.className}</strong></div><div><span>紀錄總數</span><strong>{selectedEntries.length} 筆</strong></div></div><h3 className="block-title">個人紀錄時間線 <span>{selectedTimeline.length} 項事件</span></h3><p className="timeline-intro">按日期查看紀錄、跟進與結案；紀錄總數指個案數目。</p><StudentTimeline events={selectedTimeline} onOpenCase={openCase}/></div><div className="panel-foot"><button type="button" className="btn primary wide" onClick={() => addEntry(selected.id)}><Plus size={17}/>為此學生新增紀錄</button></div></section></div>}
     {formOpen && <div className="overlay" onMouseDown={(e) => { if (e.target === e.currentTarget) setFormOpen(false); }}><section className="panel" role="dialog" aria-modal="true" aria-labelledby="form-title"><div className="panel-head"><div><small>CONDUCT RECORD</small><h2 id="form-title">{editingId ? "編輯訓育紀錄" : "新增訓育紀錄"}</h2></div><button type="button" aria-label="關閉表單" onClick={() => setFormOpen(false)}><X size={20}/></button></div><form className="entry-form" onSubmit={saveEntry}><div className="panel-body"><p className="form-intro">記下學生的正向表現或需要跟進的事項，讓處理過程更清晰。</p><div className="field-row"><label className="field"><span>班別 *</span><select value={draftStudent.className} onChange={(e) => { const first = students.find((s) => s.className === e.target.value); if (first) setDraft({ ...draft, studentId: first.id }); }} required>{classes.slice(1).map((className) => <option key={className}>{className}</option>)}</select></label><label className="field"><span>學生姓名 *</span><select value={draft.studentId} onChange={(e) => setDraft({ ...draft, studentId: e.target.value })} required>{draftClassStudents.map((s) => <option value={s.id} key={s.id}>{s.name}</option>)}</select></label></div><label className="field"><span>學號</span><input value={draftStudent.number} readOnly aria-describedby="student-number-help"/><small id="student-number-help">由學生名冊自動帶入</small></label><div className="field-row"><label className="field"><span>紀錄類型 *</span><select value={draft.kind} onChange={(e) => { const kind = e.target.value as Kind; setDraft({ ...draft, kind, category: categories[kind][0] }); }}><option>嘉許</option><option>提醒</option><option>違規</option></select></label><label className="field"><span>日期 *</span><input type="date" value={draft.date} onChange={(e) => setDraft({ ...draft, date: e.target.value })} required/></label></div><label className="field"><span>事項分類 *</span><select value={draft.category} onChange={(e) => setDraft({ ...draft, category: e.target.value })}>{categories[draft.kind].map((c) => <option key={c}>{c}</option>)}</select></label><label className="field"><span>內容說明 *</span><textarea rows={5} maxLength={300} placeholder="簡述事件、已採取的行動或後續安排…" value={draft.note} onChange={(e) => setDraft({ ...draft, note: e.target.value })} required/><small>{draft.note.length}/300 字</small></label><p className="form-warning"><ShieldCheck size={16}/> 這是前端示範版。資料只會在目前頁面暫時顯示。</p></div><div className="panel-foot"><button type="button" className="btn secondary" onClick={() => setFormOpen(false)}>取消</button><button type="submit" className="btn primary"><Check size={17}/>{editingId ? "儲存變更" : "建立紀錄"}</button></div></form></section></div>}
-    {selectedCase && caseStudent && <CasePanel key={selectedCase.id} entry={selectedCase} student={caseStudent} onClose={() => setCaseId(null)} onEdit={() => editEntry(selectedCase)} onSavePlan={saveCasePlan} onStart={startCase} onAddFollowUp={addFollowUp} onCloseCase={closeCase} onReopen={reopenCase}/>}
+    {selectedCase && caseStudent && <CasePanel key={selectedCase.id} entry={selectedCase} student={caseStudent} onClose={closeCaseView} onEdit={() => editEntry(selectedCase)} onSavePlan={saveCasePlan} onStart={startCase} onAddFollowUp={addFollowUp} onCloseCase={closeCase} onReopen={reopenCase}/>}
     {notice && <div className="toast" role="status"><CheckCircle2 size={18}/>{notice}<button type="button" aria-label="關閉通知" onClick={() => setNotice("")}><X size={14}/></button></div>}
   </div>;
+}
+function StudentTimeline({ events, onOpenCase }: { events: TimelineEvent[]; onOpenCase: (id: string) => void }) {
+  if (!events.length) return <p className="timeline-empty">目前沒有訓育紀錄或跟進事件。</p>;
+  return <ol className="student-timeline">
+    {events.map((event) => {
+      const Icon = event.type === "record" ? ClipboardList : event.type === "closed" ? CheckCircle2 : event.type === "reopened" ? ArrowRight : Clock3;
+      const title = event.type === "record" ? "建立訓育紀錄" : event.type === "closed" ? "完成結案" : event.type === "reopened" ? "重新開啟個案" : "加入跟進記錄";
+      return <li key={event.id} className={"timeline-item " + event.type}>
+        <span className="timeline-dot" aria-hidden="true"><Icon size={14}/></span>
+        <article className="timeline-card">
+          <div className="timeline-card-head"><strong>{title}</strong><time dateTime={event.date}>{dateLabel(event.date)}</time></div>
+          <div className="timeline-card-category">{event.category}{event.type === "record" && <KindTag kind={event.kind}/>}</div>
+          <p>{event.detail}</p>
+          <div className="timeline-card-foot">
+            {event.type === "record" ? <StatusTag status={event.status}/> : <span>{event.author ?? (event.type === "closed" ? "結案結果" : "訓育組")}</span>}
+            <button type="button" className="row-button" onClick={() => onOpenCase(event.caseId)}>查看個案 <ChevronRight size={14}/></button>
+          </div>
+        </article>
+      </li>;
+    })}
+  </ol>;
 }
 function CasePanel({ entry, student, onClose, onEdit, onSavePlan, onStart, onAddFollowUp, onCloseCase, onReopen }: {
   entry: Entry; student: Student; onClose: () => void; onEdit: () => void;
@@ -262,9 +319,3 @@ function Stat({ icon: Icon, color, value, label, hint }: { icon: typeof UsersRou
   return <section className="stat"><div className="stat-top"><span className={"stat-icon " + color}><Icon size={20}/></span><small>{hint}</small></div><strong>{String(value).padStart(2, "0")}</strong><p>{label}</p></section>;
 }
 function Empty({ text, hint }: { text: string; hint: string }) { return <div className="empty"><Search size={23}/><strong>{text}</strong><p>{hint}</p></div>; }
-
-
-
-
-
-

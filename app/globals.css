@@ -60,3 +60,24 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 .case-closing .btn{margin-top:3px}
 .case-closing .case-description{margin:8px 0 12px}
 @media(max-width:620px){.case-panel{width:100%}.case-steps{gap:4px}.case-steps span{font-size:9px}.case-person{flex-wrap:wrap}.case-person .status-tag{margin-left:auto}.case-facts{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+/* Student history across cases */
+.timeline-intro{margin:-5px 0 18px;color:#92a5aa;font-size:10px;line-height:1.6}
+.timeline-empty{margin:0;padding:24px 15px;border:1px dashed #d9e7e7;border-radius:10px;color:#8fa4a9;text-align:center;font-size:11px}
+.student-timeline{margin:0;padding:0;list-style:none}
+.timeline-item{position:relative;padding:0 0 17px 33px}
+.timeline-item:not(:last-child):before{position:absolute;left:13px;top:27px;bottom:0;width:2px;background:#e4efed;content:""}
+.timeline-dot{position:absolute;left:0;top:4px;width:27px;height:27px;display:grid;place-items:center;border:1px solid #d9e9e5;border-radius:50%;background:#eff8f5;color:#268a7f}
+.timeline-item.follow-up .timeline-dot{border-color:#e8e4d7;background:#fbf7e9;color:#aa8a48}
+.timeline-item.closed .timeline-dot{border-color:#d9e9e1;background:#eaf6ee;color:#488e77}
+.timeline-item.reopened .timeline-dot{border-color:#dfebf6;background:#edf4fb;color:#5f86b1}
+.timeline-card{padding:14px 15px;border:1px solid #e7eff0;border-radius:11px;background:#fff;box-shadow:0 3px 12px #225a6006}
+.timeline-card-head,.timeline-card-foot{display:flex;align-items:center;justify-content:space-between;gap:9px}
+.timeline-card-head strong{color:#33505a;font-size:11px}
+.timeline-card-head time{flex:none;color:#9aadb1;font-size:10px}
+.timeline-card-category{display:flex;align-items:center;gap:7px;margin-top:10px;color:#455e66;font-size:11px;font-weight:800}
+.timeline-card-category .kind-tag{padding:3px 6px;font-size:9px}
+.timeline-card p{margin:7px 0 11px;color:#7f959b;font-size:11px;line-height:1.6;white-space:pre-wrap}
+.timeline-card-foot{padding-top:9px;border-top:1px solid #f0f4f4}
+.timeline-card-foot>span:not(.status-tag){color:#a0b0b4;font-size:10px}
+@media(max-width:430px){.timeline-card{padding:12px}.timeline-item{padding-left:31px}.timeline-card-head{flex-wrap:wrap}.timeline-card-head time{margin-left:auto}}
