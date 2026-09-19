@@ -1,13 +1,17 @@
 "use client";
 
 import { useEffect, useMemo, useState, type FormEvent } from "react";
-import { BookOpenCheck, CalendarDays, Check, CheckCircle2, ChevronDown, ChevronRight, ClipboardList, Clock3, FilePenLine, Filter, LayoutDashboard, Menu, Plus, Search, ShieldCheck, Sparkles, UsersRound, X, ArrowRight, HeartHandshake } from "lucide-react";
+import { ArrowRight, ArrowUpDown, BookOpenCheck, CalendarDays, Check, CheckCircle2, ChevronDown, ChevronRight, ClipboardList, Clock3, FilePenLine, Filter, HeartHandshake, LayoutDashboard, Menu, Plus, RotateCcw, Search, ShieldCheck, SlidersHorizontal, Sparkles, UsersRound, X } from "lucide-react";
 
 type Page = "dashboard" | "todos" | "students" | "records";
 type Kind = "嘉許" | "提醒" | "違規";
 type Status = "待跟進" | "跟進中" | "已結案";
 type TodoScope = "open" | "completed";
-type TodoFilter = "all" | "overdue" | "today" | "unscheduled";
+type TodoFilter = "all" | "overdue" | "today" | "next7" | "unscheduled";
+type TodoSort = "priority" | "updated-desc" | "student-asc" | "class-asc";
+type StudentFollowUpFilter = "全部跟進" | "有待跟進" | "有逾期待辦" | "沒有待跟進";
+type StudentSort = "class-asc" | "name-asc" | "records-desc" | "pending-desc" | "latest-desc";
+type RecordSort = "date-desc" | "date-asc" | "updated-desc" | "student-asc" | "status-priority";
 type Student = { id: string; name: string; className: string; seat: string; number: string };
 type FollowUp = { id: string; date: string; at?: string; author: string; note: string; type?: "follow-up" | "reopened" };
 type Closure = { id: string; date: string; at?: string; summary: string };
@@ -21,6 +25,8 @@ type Entry = {
   assignee?: string; dueDate?: string; followUps?: FollowUp[]; resolution?: string; closedAt?: string; closureHistory?: Closure[];
 };
 type Draft = Pick<Entry, "studentId" | "kind" | "category" | "date" | "note" | "status">;
+const ALL_ASSIGNEES = "__filter_all_assignees__";
+const UNASSIGNED = "__filter_unassigned__";
 
 const students: Student[] = [
   { id: "s1", name: "陳子晴", className: "中一甲", seat: "03", number: "S260103" },
@@ -47,14 +53,21 @@ const categories: Record<Kind, string[]> = {
   提醒: ["課堂秩序", "守時", "校園常規", "其他提醒"],
   違規: ["校園常規", "課堂秩序", "守時", "其他違規"],
 };
+const currentLocalDate = () => new Date().toLocaleDateString("sv-SE");
 const newDraft = (): Draft => ({
   studentId: students[0].id, kind: "嘉許", category: "服務精神",
-  date: new Date().toLocaleDateString("sv-SE"), note: "", status: "待跟進",
+  date: currentLocalDate(), note: "", status: "待跟進",
 });
 const dateLabel = (date: string) => date.replaceAll("-", "/");
+const assigneeOptionLabel = (value: string) => value === ALL_ASSIGNEES ? "全部負責人" : value === UNASSIGNED ? "未指定" : value;
 const latestActivityDate = (entry: Entry) => {
-  const dates = [entry.date, entry.closedAt, ...(entry.followUps ?? []).map((item) => item.date)].filter(Boolean) as string[];
+  const dates = [entry.date, entry.closedAt, ...(entry.followUps ?? []).map((item) => item.date), ...(entry.closureHistory ?? []).map((item) => item.date)].filter(Boolean) as string[];
   return dates.sort((a, b) => b.localeCompare(a))[0];
+};
+const addDays = (date: string, amount: number) => {
+  const value = new Date(date + "T00:00:00");
+  value.setDate(value.getDate() + amount);
+  return value.toLocaleDateString("sv-SE");
 };
 const daysBetween = (from: string, to: string) => Math.max(1, Math.round((new Date(to + "T00:00:00").getTime() - new Date(from + "T00:00:00").getTime()) / 86400000));
 function todoDueMeta(entry: Entry, today: string) {
@@ -96,12 +109,30 @@ function StatusTag({ status }: { status: Status }) { return <span className={"st
 export default function Home() {
   const [page, setPage] = useState<Page>("dashboard");
   const [entries, setEntries] = useState<Entry[]>(initialEntries);
-  const [search, setSearch] = useState("");
-  const [classFilter, setClassFilter] = useState("全部班級");
-  const [kindFilter, setKindFilter] = useState("全部類型");
-  const [statusFilter, setStatusFilter] = useState("全部狀態");
+  const [studentSearch, setStudentSearch] = useState("");
+  const [studentClassFilter, setStudentClassFilter] = useState("全部班級");
+  const [studentFollowUpFilter, setStudentFollowUpFilter] = useState<StudentFollowUpFilter>("全部跟進");
+  const [studentSort, setStudentSort] = useState<StudentSort>("class-asc");
+  const [studentFiltersOpen, setStudentFiltersOpen] = useState(false);
+  const [recordSearch, setRecordSearch] = useState("");
+  const [recordClassFilter, setRecordClassFilter] = useState("全部班級");
+  const [recordKindFilter, setRecordKindFilter] = useState("全部類型");
+  const [recordCategoryFilter, setRecordCategoryFilter] = useState("全部事項");
+  const [recordStatusFilter, setRecordStatusFilter] = useState("全部狀態");
+  const [recordAssigneeFilter, setRecordAssigneeFilter] = useState(ALL_ASSIGNEES);
+  const [recordDateFrom, setRecordDateFrom] = useState("");
+  const [recordDateTo, setRecordDateTo] = useState("");
+  const [recordSort, setRecordSort] = useState<RecordSort>("date-desc");
+  const [recordFiltersOpen, setRecordFiltersOpen] = useState(false);
+  const [todoSearch, setTodoSearch] = useState("");
   const [todoScope, setTodoScope] = useState<TodoScope>("open");
   const [todoFilter, setTodoFilter] = useState<TodoFilter>("all");
+  const [todoClassFilter, setTodoClassFilter] = useState("全部班級");
+  const [todoKindFilter, setTodoKindFilter] = useState("全部類型");
+  const [todoStatusFilter, setTodoStatusFilter] = useState("全部狀態");
+  const [todoAssigneeFilter, setTodoAssigneeFilter] = useState(ALL_ASSIGNEES);
+  const [todoSort, setTodoSort] = useState<TodoSort>("priority");
+  const [todoFiltersOpen, setTodoFiltersOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [studentId, setStudentId] = useState<string | null>(null);
   const [caseId, setCaseId] = useState<string | null>(null);
@@ -110,12 +141,23 @@ export default function Home() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draft, setDraft] = useState<Draft>(newDraft);
   const [notice, setNotice] = useState("");
+  const [today, setToday] = useState(currentLocalDate);
 
   useEffect(() => {
     if (!notice) return;
     const timer = window.setTimeout(() => setNotice(""), 3200);
     return () => window.clearTimeout(timer);
   }, [notice]);
+  useEffect(() => {
+    let timer = 0;
+    const scheduleNextDay = () => {
+      const now = new Date();
+      const nextDay = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+      timer = window.setTimeout(() => { setToday(currentLocalDate()); scheduleNextDay(); }, nextDay.getTime() - now.getTime() + 1000);
+    };
+    scheduleNextDay();
+    return () => window.clearTimeout(timer);
+  }, []);
   useEffect(() => {
     if (!formOpen && !studentId && !caseId) return;
     const close = (event: KeyboardEvent) => {
@@ -130,7 +172,7 @@ export default function Home() {
   }, [formOpen, studentId, caseId, caseReturnStudentId]);
 
   const studentMap = useMemo(() => new Map(students.map((s) => [s.id, s])), []);
-  const today = new Date().toLocaleDateString("sv-SE");
+  const next7Date = addDays(today, 7);
   const pending = entries.filter((e) => e.status !== "已結案");
   const praise = entries.filter((e) => e.kind === "嘉許");
   const closed = entries.filter((e) => e.status === "已結案");
@@ -138,29 +180,114 @@ export default function Home() {
   const todayTodos = pending.filter((e) => e.dueDate === today);
   const unscheduledTodos = pending.filter((e) => !e.dueDate);
   const classes = ["全部班級", ...new Set(students.map((s) => s.className))];
-  const shownStudents = students.filter((s) =>
-    (s.name + s.className + s.number).toLowerCase().includes(search.toLowerCase().trim()) &&
-    (classFilter === "全部班級" || s.className === classFilter)
-  );
+  const classOrder = useMemo(() => new Map([...new Set(students.map((student) => student.className))].map((className, index) => [className, index])), []);
+  const assignees = [ALL_ASSIGNEES, UNASSIGNED, ...new Set(entries.map((entry) => entry.assignee?.trim()).filter((value): value is string => Boolean(value) && value !== ALL_ASSIGNEES && value !== UNASSIGNED))];
+  const recordCategories = ["全部事項", ...new Set(entries.map((entry) => entry.category))];
+  const studentStats = useMemo(() => {
+    const stats = new Map(students.map((student) => [student.id, { total: 0, pending: 0, overdue: 0, latest: "" }]));
+    for (const entry of entries) {
+      const item = stats.get(entry.studentId);
+      if (!item) continue;
+      item.total += 1;
+      if (entry.status !== "已結案") item.pending += 1;
+      if (entry.status !== "已結案" && entry.dueDate && entry.dueDate < today) item.overdue += 1;
+      const latest = latestActivityDate(entry);
+      if (latest > item.latest) item.latest = latest;
+    }
+    return stats;
+  }, [entries, today]);
+  const compareStudentClass = (a: Student, b: Student) =>
+    (classOrder.get(a.className) ?? 999) - (classOrder.get(b.className) ?? 999) || Number(a.seat) - Number(b.seat) || a.name.localeCompare(b.name, "zh-Hant");
+  const studentQuery = studentSearch.toLocaleLowerCase("zh-Hant").trim();
+  const shownStudents = students.filter((student) => {
+    const stats = studentStats.get(student.id)!;
+    const matchesSearch = (student.name + student.className + student.number).toLocaleLowerCase("zh-Hant").includes(studentQuery);
+    const matchesClass = studentClassFilter === "全部班級" || student.className === studentClassFilter;
+    const matchesFollowUp = studentFollowUpFilter === "全部跟進" ||
+      (studentFollowUpFilter === "有待跟進" && stats.pending > 0) ||
+      (studentFollowUpFilter === "有逾期待辦" && stats.overdue > 0) ||
+      (studentFollowUpFilter === "沒有待跟進" && stats.pending === 0);
+    return matchesSearch && matchesClass && matchesFollowUp;
+  }).sort((a, b) => {
+    const aStats = studentStats.get(a.id)!;
+    const bStats = studentStats.get(b.id)!;
+    if (studentSort === "name-asc") return a.name.localeCompare(b.name, "zh-Hant") || compareStudentClass(a, b);
+    if (studentSort === "records-desc") return bStats.total - aStats.total || compareStudentClass(a, b);
+    if (studentSort === "pending-desc") return bStats.pending - aStats.pending || bStats.overdue - aStats.overdue || compareStudentClass(a, b);
+    if (studentSort === "latest-desc") return bStats.latest.localeCompare(aStats.latest) || compareStudentClass(a, b);
+    return compareStudentClass(a, b);
+  });
+  const recordQuery = recordSearch.toLocaleLowerCase("zh-Hant").trim();
+  const recordDateRangeInvalid = Boolean(recordDateFrom && recordDateTo && recordDateFrom > recordDateTo);
   const shownEntries = entries.filter((e) => {
     const student = studentMap.get(e.studentId);
-    return ((student?.name ?? "") + (student?.className ?? "") + e.category + e.note).toLowerCase().includes(search.toLowerCase().trim()) &&
-      (kindFilter === "全部類型" || e.kind === kindFilter) &&
-      (statusFilter === "全部狀態" || e.status === statusFilter);
-  }).sort((a, b) => b.date.localeCompare(a.date));
+    const searchable = ((student?.name ?? "") + (student?.className ?? "") + (student?.number ?? "") + e.category + e.note + (e.assignee ?? "")).toLocaleLowerCase("zh-Hant");
+    const matchesAssignee = recordAssigneeFilter === ALL_ASSIGNEES || (recordAssigneeFilter === UNASSIGNED ? !e.assignee?.trim() : e.assignee?.trim() === recordAssigneeFilter);
+    const matchesDate = recordDateRangeInvalid || ((!recordDateFrom || e.date >= recordDateFrom) && (!recordDateTo || e.date <= recordDateTo));
+    return searchable.includes(recordQuery) &&
+      (recordClassFilter === "全部班級" || student?.className === recordClassFilter) &&
+      (recordKindFilter === "全部類型" || e.kind === recordKindFilter) &&
+      (recordCategoryFilter === "全部事項" || e.category === recordCategoryFilter) &&
+      (recordStatusFilter === "全部狀態" || e.status === recordStatusFilter) && matchesAssignee && matchesDate;
+  }).sort((a, b) => {
+    const aStudent = studentMap.get(a.studentId)!;
+    const bStudent = studentMap.get(b.studentId)!;
+    if (recordSort === "date-asc") return a.date.localeCompare(b.date) || a.id.localeCompare(b.id);
+    if (recordSort === "updated-desc") return latestActivityDate(b).localeCompare(latestActivityDate(a)) || b.date.localeCompare(a.date) || a.id.localeCompare(b.id);
+    if (recordSort === "student-asc") return compareStudentClass(aStudent, bStudent) || b.date.localeCompare(a.date);
+    if (recordSort === "status-priority") {
+      const rank: Record<Status, number> = { "待跟進": 0, "跟進中": 1, "已結案": 2 };
+      return rank[a.status] - rank[b.status] || b.date.localeCompare(a.date) || a.id.localeCompare(b.id);
+    }
+    return b.date.localeCompare(a.date) || a.id.localeCompare(b.id);
+  });
+  const todoQuery = todoSearch.toLocaleLowerCase("zh-Hant").trim();
   const shownTodos = (todoScope === "open" ? pending : closed).filter((entry) => {
     const student = studentMap.get(entry.studentId);
-    const matchesSearch = ((student?.name ?? "") + (student?.className ?? "") + (student?.number ?? "") + entry.category + entry.note + (entry.assignee ?? "")).toLowerCase().includes(search.toLowerCase().trim());
-    if (!matchesSearch || todoScope === "completed") return matchesSearch;
+    const matchesSearch = ((student?.name ?? "") + (student?.className ?? "") + (student?.number ?? "") + entry.category + entry.note + (entry.assignee ?? "")).toLocaleLowerCase("zh-Hant").includes(todoQuery);
+    const matchesAssignee = todoAssigneeFilter === ALL_ASSIGNEES || (todoAssigneeFilter === UNASSIGNED ? !entry.assignee?.trim() : entry.assignee?.trim() === todoAssigneeFilter);
+    const matchesAdvanced = (todoClassFilter === "全部班級" || student?.className === todoClassFilter) &&
+      (todoKindFilter === "全部類型" || entry.kind === todoKindFilter) &&
+      (todoScope === "completed" || todoStatusFilter === "全部狀態" || entry.status === todoStatusFilter) && matchesAssignee;
+    if (!matchesSearch || !matchesAdvanced || todoScope === "completed") return matchesSearch && matchesAdvanced;
     if (todoFilter === "overdue") return Boolean(entry.dueDate && entry.dueDate < today);
     if (todoFilter === "today") return entry.dueDate === today;
+    if (todoFilter === "next7") return Boolean(entry.dueDate && entry.dueDate > today && entry.dueDate <= next7Date);
     if (todoFilter === "unscheduled") return !entry.dueDate;
     return true;
   }).sort((a, b) => {
-    if (todoScope === "completed") return (b.closedAt ?? latestActivityDate(b)).localeCompare(a.closedAt ?? latestActivityDate(a));
+    const aStudent = studentMap.get(a.studentId)!;
+    const bStudent = studentMap.get(b.studentId)!;
+    if (todoSort === "updated-desc") return latestActivityDate(b).localeCompare(latestActivityDate(a)) || a.id.localeCompare(b.id);
+    if (todoSort === "student-asc") return aStudent.name.localeCompare(bStudent.name, "zh-Hant") || compareStudentClass(aStudent, bStudent);
+    if (todoSort === "class-asc") return compareStudentClass(aStudent, bStudent) || latestActivityDate(a).localeCompare(latestActivityDate(b));
+    if (todoScope === "completed") return (b.closedAt ?? latestActivityDate(b)).localeCompare(a.closedAt ?? latestActivityDate(a)) || a.id.localeCompare(b.id);
     const rank = (entry: Entry) => !entry.dueDate ? 3 : entry.dueDate < today ? 0 : entry.dueDate === today ? 1 : 2;
-    return rank(a) - rank(b) || (a.dueDate ?? "9999-12-31").localeCompare(b.dueDate ?? "9999-12-31") || b.date.localeCompare(a.date);
+    return rank(a) - rank(b) || (a.dueDate ?? "9999-12-31").localeCompare(b.dueDate ?? "9999-12-31") || latestActivityDate(a).localeCompare(latestActivityDate(b)) || a.id.localeCompare(b.id);
   });
+  const studentActiveFilters = [
+    studentSearch && `搜尋「${studentSearch}」`,
+    studentClassFilter !== "全部班級" && studentClassFilter,
+    studentFollowUpFilter !== "全部跟進" && studentFollowUpFilter,
+  ].filter(Boolean) as string[];
+  const recordActiveFilters = [
+    recordSearch && `搜尋「${recordSearch}」`,
+    recordClassFilter !== "全部班級" && recordClassFilter,
+    recordKindFilter !== "全部類型" && recordKindFilter,
+    recordCategoryFilter !== "全部事項" && recordCategoryFilter,
+    recordStatusFilter !== "全部狀態" && recordStatusFilter,
+    recordAssigneeFilter !== ALL_ASSIGNEES && (recordAssigneeFilter === UNASSIGNED ? "未指定負責人" : recordAssigneeFilter),
+    recordDateFrom && `由 ${dateLabel(recordDateFrom)}`,
+    recordDateTo && `至 ${dateLabel(recordDateTo)}`,
+  ].filter(Boolean) as string[];
+  const todoActiveFilters = [
+    todoSearch && `搜尋「${todoSearch}」`,
+    todoFilter !== "all" && ({ overdue: "已逾期", today: "今日到期", next7: "未來 7 日", unscheduled: "未設期限" } as const)[todoFilter],
+    todoClassFilter !== "全部班級" && todoClassFilter,
+    todoKindFilter !== "全部類型" && todoKindFilter,
+    todoScope === "open" && todoStatusFilter !== "全部狀態" && todoStatusFilter,
+    todoAssigneeFilter !== ALL_ASSIGNEES && (todoAssigneeFilter === UNASSIGNED ? "未指定負責人" : todoAssigneeFilter),
+  ].filter(Boolean) as string[];
   const selected = studentId ? studentMap.get(studentId) : undefined;
   const selectedEntries = selected ? entries.filter((e) => e.studentId === selected.id) : [];
   const selectedTimeline = buildStudentTimeline(selectedEntries);
@@ -169,7 +296,18 @@ export default function Home() {
   const selectedCase = caseId ? entries.find((e) => e.id === caseId) : undefined;
   const caseStudent = selectedCase ? studentMap.get(selectedCase.studentId) : undefined;
 
-  function navigate(next: Page) { setPage(next); setSearch(""); setMenuOpen(false); }
+  function resetStudentFilters() {
+    setStudentSearch(""); setStudentClassFilter("全部班級"); setStudentFollowUpFilter("全部跟進");
+  }
+  function resetRecordFilters() {
+    setRecordSearch(""); setRecordClassFilter("全部班級"); setRecordKindFilter("全部類型"); setRecordCategoryFilter("全部事項");
+    setRecordStatusFilter("全部狀態"); setRecordAssigneeFilter(ALL_ASSIGNEES); setRecordDateFrom(""); setRecordDateTo("");
+  }
+  function resetTodoFilters() {
+    setTodoSearch(""); setTodoFilter("all"); setTodoClassFilter("全部班級"); setTodoKindFilter("全部類型");
+    setTodoStatusFilter("全部狀態"); setTodoAssigneeFilter(ALL_ASSIGNEES);
+  }
+  function navigate(next: Page) { setPage(next); setMenuOpen(false); }
   function addEntry(id?: string) {
     setEditingId(null); setDraft({ ...newDraft(), studentId: id || students[0].id });
     setStudentId(null); setCaseId(null); setCaseReturnStudentId(null); setFormOpen(true);
@@ -274,20 +412,86 @@ export default function Home() {
           today={today}
           scope={todoScope}
           filter={todoFilter}
-          search={search}
+          search={todoSearch}
+          sort={todoSort}
+          classFilter={todoClassFilter}
+          kindFilter={todoKindFilter}
+          statusFilter={todoStatusFilter}
+          assigneeFilter={todoAssigneeFilter}
+          filtersOpen={todoFiltersOpen}
+          activeFilters={todoActiveFilters}
+          classes={classes}
+          assignees={assignees}
           openCount={pending.length}
           completedCount={closed.length}
           overdueCount={overdueTodos.length}
           todayCount={todayTodos.length}
           unscheduledCount={unscheduledTodos.length}
-          onSearch={setSearch}
-          onScopeChange={setTodoScope}
+          onSearch={setTodoSearch}
+          onSortChange={setTodoSort}
+          onClassFilterChange={setTodoClassFilter}
+          onKindFilterChange={setTodoKindFilter}
+          onStatusFilterChange={setTodoStatusFilter}
+          onAssigneeFilterChange={setTodoAssigneeFilter}
+          onFiltersOpenChange={setTodoFiltersOpen}
+          onReset={resetTodoFilters}
+          onScopeChange={(next) => { setTodoScope(next); if (next === "completed") { setTodoFilter("all"); setTodoStatusFilter("全部狀態"); } }}
           onFilterChange={(next) => { setTodoScope("open"); setTodoFilter(next); }}
           onOpenCase={openCase}
           onStart={startCase}
         />}
-        {page === "students" && <section className="card table-card"><div className="table-heading"><div><small>STUDENT DIRECTORY</small><h2>學生資料 <b>{shownStudents.length}</b></h2></div><div className="filters"><label className="search"><Search size={16}/><input aria-label="搜尋學生" placeholder="搜尋姓名或學號" value={search} onChange={(e) => setSearch(e.target.value)}/></label><label className="select"><Filter size={15}/><select aria-label="篩選班級" value={classFilter} onChange={(e) => setClassFilter(e.target.value)}>{classes.map((c) => <option key={c}>{c}</option>)}</select></label></div></div><div className="table-scroll"><table><thead><tr><th>學生</th><th>班級 / 學號</th><th>紀錄數</th><th>待跟進</th><th>操作</th></tr></thead><tbody>{shownStudents.map((s) => { const total = entries.filter((e) => e.studentId === s.id).length; const todo = pending.filter((e) => e.studentId === s.id).length; return <tr key={s.id}><td><div className="person"><Avatar student={s}/><div><strong>{s.name}</strong><small>座號 {s.seat}</small></div></div></td><td><strong>{s.className}</strong><small className="cell-sub">{s.number}</small></td><td><span className="count">{total}</span></td><td>{todo ? <span className="todo-count">● {todo} 項</span> : <span className="muted">—</span>}</td><td><button type="button" className="row-button" onClick={() => setStudentId(s.id)}>查看資料 <ChevronRight size={15}/></button></td></tr>; })}</tbody></table>{!shownStudents.length && <Empty text="找不到符合條件的學生" hint="請更改搜尋字詞或班級。"/>}</div><div className="table-foot">顯示 {shownStudents.length} 位學生 <span>資料僅供介面示範</span></div></section>}
-        {page === "records" && <section className="card table-card"><div className="table-heading"><div><small>CONDUCT RECORDS</small><h2>全部紀錄 <b>{shownEntries.length}</b></h2></div><div className="filters"><label className="search"><Search size={16}/><input aria-label="搜尋紀錄" placeholder="搜尋學生或事項" value={search} onChange={(e) => setSearch(e.target.value)}/></label><label className="select"><select aria-label="篩選類型" value={kindFilter} onChange={(e) => setKindFilter(e.target.value)}><option>全部類型</option><option>嘉許</option><option>提醒</option><option>違規</option></select></label><label className="select"><select aria-label="篩選狀態" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}><option>全部狀態</option><option>待跟進</option><option>跟進中</option><option>已結案</option></select></label></div></div><div className="table-scroll"><table className="records-table"><thead><tr><th>日期 / 學生</th><th>類型</th><th>事項</th><th>狀態</th><th>操作</th></tr></thead><tbody>{shownEntries.map((e) => { const s = studentMap.get(e.studentId)!; return <tr key={e.id}><td><div className="person"><Avatar student={s}/><div><strong>{s.name} <span>· {s.className}</span></strong><small>{dateLabel(e.date)}</small></div></div></td><td><KindTag kind={e.kind}/></td><td><strong>{e.category}</strong><small className="entry-note">{e.note}</small></td><td><StatusTag status={e.status}/></td><td><div className="actions"><button type="button" className="row-button" onClick={() => openCase(e.id)}><ChevronRight size={15}/>詳情</button><button type="button" className="row-button" onClick={() => editEntry(e)}><FilePenLine size={15}/>編輯</button></div></td></tr>; })}</tbody></table>{!shownEntries.length && <Empty text="沒有符合條件的紀錄" hint="請調整搜尋字詞或篩選條件。"/>}</div><div className="table-foot">顯示 {shownEntries.length} 筆紀錄 <span>資料僅供介面示範</span></div></section>}
+        {page === "students" && <StudentDirectory
+          students={shownStudents}
+          totalCount={students.length}
+          stats={studentStats}
+          search={studentSearch}
+          classFilter={studentClassFilter}
+          followUpFilter={studentFollowUpFilter}
+          sort={studentSort}
+          filtersOpen={studentFiltersOpen}
+          activeFilters={studentActiveFilters}
+          classes={classes}
+          onSearch={setStudentSearch}
+          onClassFilterChange={setStudentClassFilter}
+          onFollowUpFilterChange={setStudentFollowUpFilter}
+          onSortChange={setStudentSort}
+          onFiltersOpenChange={setStudentFiltersOpen}
+          onReset={resetStudentFilters}
+          onOpenStudent={setStudentId}
+        />}
+        {page === "records" && <RecordsDirectory
+          entries={shownEntries}
+          totalCount={entries.length}
+          studentMap={studentMap}
+          search={recordSearch}
+          classFilter={recordClassFilter}
+          kindFilter={recordKindFilter}
+          categoryFilter={recordCategoryFilter}
+          statusFilter={recordStatusFilter}
+          assigneeFilter={recordAssigneeFilter}
+          dateFrom={recordDateFrom}
+          dateTo={recordDateTo}
+          dateRangeInvalid={recordDateRangeInvalid}
+          sort={recordSort}
+          filtersOpen={recordFiltersOpen}
+          activeFilters={recordActiveFilters}
+          classes={classes}
+          categories={recordCategories}
+          assignees={assignees}
+          onSearch={setRecordSearch}
+          onClassFilterChange={setRecordClassFilter}
+          onKindFilterChange={setRecordKindFilter}
+          onCategoryFilterChange={setRecordCategoryFilter}
+          onStatusFilterChange={setRecordStatusFilter}
+          onAssigneeFilterChange={setRecordAssigneeFilter}
+          onDateFromChange={setRecordDateFrom}
+          onDateToChange={setRecordDateTo}
+          onSortChange={setRecordSort}
+          onFiltersOpenChange={setRecordFiltersOpen}
+          onReset={resetRecordFilters}
+          onOpenCase={openCase}
+          onEdit={editEntry}
+        />}
         <footer>校園訓育系統 · 前端介面示範 <span>所有學生及紀錄均為虛構資料</span></footer>
       </main>
     </div>
@@ -297,26 +501,167 @@ export default function Home() {
     {notice && <div className="toast" role="status"><CheckCircle2 size={18}/>{notice}<button type="button" aria-label="關閉通知" onClick={() => setNotice("")}><X size={14}/></button></div>}
   </div>;
 }
-function TodoCenter({ todos, studentMap, today, scope, filter, search, openCount, completedCount, overdueCount, todayCount, unscheduledCount, onSearch, onScopeChange, onFilterChange, onOpenCase, onStart }: {
+
+function FilterSummary({ labels, onReset }: { labels: string[]; onReset: () => void }) {
+  if (!labels.length) return null;
+  return <div className="active-filters" aria-label="已套用條件">
+    <span className="filter-summary-label"><Filter size={13}/>已套用</span>
+    {labels.map((label, index) => <span className="filter-chip" key={index + "-" + label}>{label}</span>)}
+    <button type="button" onClick={onReset}><RotateCcw size={13}/>清除全部</button>
+  </div>;
+}
+
+function StudentDirectory({ students: shown, totalCount, stats, search, classFilter, followUpFilter, sort, filtersOpen, activeFilters, classes, onSearch, onClassFilterChange, onFollowUpFilterChange, onSortChange, onFiltersOpenChange, onReset, onOpenStudent }: {
+  students: Student[];
+  totalCount: number;
+  stats: Map<string, { total: number; pending: number; overdue: number; latest: string }>;
+  search: string;
+  classFilter: string;
+  followUpFilter: StudentFollowUpFilter;
+  sort: StudentSort;
+  filtersOpen: boolean;
+  activeFilters: string[];
+  classes: string[];
+  onSearch: (value: string) => void;
+  onClassFilterChange: (value: string) => void;
+  onFollowUpFilterChange: (value: StudentFollowUpFilter) => void;
+  onSortChange: (value: StudentSort) => void;
+  onFiltersOpenChange: (value: boolean) => void;
+  onReset: () => void;
+  onOpenStudent: (id: string) => void;
+}) {
+  const advancedCount = Number(classFilter !== "全部班級") + Number(followUpFilter !== "全部跟進");
+  return <section className="card table-card">
+    <div className="table-heading">
+      <div><small>STUDENT DIRECTORY</small><h2>學生資料 <b>{shown.length}</b></h2></div>
+      <div className="filters list-toolbar">
+        <label className="search"><Search size={16}/><input aria-label="搜尋學生" placeholder="搜尋姓名、班級或學號" value={search} onChange={(event) => onSearch(event.target.value)}/></label>
+        <label className="select toolbar-select"><ArrowUpDown size={15}/><select aria-label="學生排序" value={sort} onChange={(event) => onSortChange(event.target.value as StudentSort)}>
+          <option value="class-asc">班級及座號</option><option value="name-asc">姓名</option><option value="pending-desc">待跟進最多</option><option value="records-desc">紀錄最多</option><option value="latest-desc">最近有活動</option>
+        </select></label>
+        <button type="button" className={"advanced-toggle" + (filtersOpen ? " active" : "")} aria-expanded={filtersOpen} aria-controls="student-advanced-filters" onClick={() => onFiltersOpenChange(!filtersOpen)}><SlidersHorizontal size={15}/>進階篩選{advancedCount > 0 && <b>{advancedCount}</b>}</button>
+      </div>
+    </div>
+    {filtersOpen && <div className="advanced-filter-panel" id="student-advanced-filters">
+      <div className="advanced-filter-head"><div><strong>篩選學生</strong><span>條件會同時套用</span></div><button type="button" onClick={onReset}><RotateCcw size={14}/>重設</button></div>
+      <div className="advanced-filter-grid compact">
+        <label className="filter-field"><span>班級</span><select value={classFilter} onChange={(event) => onClassFilterChange(event.target.value)}>{classes.map((item) => <option key={item}>{item}</option>)}</select></label>
+        <label className="filter-field"><span>跟進情況</span><select value={followUpFilter} onChange={(event) => onFollowUpFilterChange(event.target.value as StudentFollowUpFilter)}><option>全部跟進</option><option>有待跟進</option><option>有逾期待辦</option><option>沒有待跟進</option></select></label>
+      </div>
+    </div>}
+    <FilterSummary labels={activeFilters} onReset={onReset}/>
+    <div className="table-scroll"><table><thead><tr><th>學生</th><th>班級 / 學號</th><th>紀錄數</th><th>待跟進</th><th>操作</th></tr></thead><tbody>{shown.map((student) => {
+      const item = stats.get(student.id)!;
+      return <tr key={student.id}><td><div className="person"><Avatar student={student}/><div><strong>{student.name}</strong><small>座號 {student.seat}</small></div></div></td><td><strong>{student.className}</strong><small className="cell-sub">{student.number}</small></td><td><span className="count">{item.total}</span></td><td>{item.pending ? <span className={item.overdue ? "todo-count overdue-text" : "todo-count"}>● {item.pending} 項{item.overdue ? `（${item.overdue} 項逾期）` : ""}</span> : <span className="muted">—</span>}</td><td><button type="button" className="row-button" onClick={() => onOpenStudent(student.id)}>查看資料 <ChevronRight size={15}/></button></td></tr>;
+    })}</tbody></table>{!shown.length && <Empty text="找不到符合條件的學生" hint="可清除條件後重新查看全部學生。" onReset={activeFilters.length ? onReset : undefined}/>}</div>
+    <div className="table-foot" aria-live="polite">顯示 {shown.length} / {totalCount} 位學生 <span>資料僅供介面示範</span></div>
+  </section>;
+}
+
+function RecordsDirectory({ entries, totalCount, studentMap, search, classFilter, kindFilter, categoryFilter, statusFilter, assigneeFilter, dateFrom, dateTo, dateRangeInvalid, sort, filtersOpen, activeFilters, classes, categories: recordCategories, assignees, onSearch, onClassFilterChange, onKindFilterChange, onCategoryFilterChange, onStatusFilterChange, onAssigneeFilterChange, onDateFromChange, onDateToChange, onSortChange, onFiltersOpenChange, onReset, onOpenCase, onEdit }: {
+  entries: Entry[];
+  totalCount: number;
+  studentMap: Map<string, Student>;
+  search: string;
+  classFilter: string;
+  kindFilter: string;
+  categoryFilter: string;
+  statusFilter: string;
+  assigneeFilter: string;
+  dateFrom: string;
+  dateTo: string;
+  dateRangeInvalid: boolean;
+  sort: RecordSort;
+  filtersOpen: boolean;
+  activeFilters: string[];
+  classes: string[];
+  categories: string[];
+  assignees: string[];
+  onSearch: (value: string) => void;
+  onClassFilterChange: (value: string) => void;
+  onKindFilterChange: (value: string) => void;
+  onCategoryFilterChange: (value: string) => void;
+  onStatusFilterChange: (value: string) => void;
+  onAssigneeFilterChange: (value: string) => void;
+  onDateFromChange: (value: string) => void;
+  onDateToChange: (value: string) => void;
+  onSortChange: (value: RecordSort) => void;
+  onFiltersOpenChange: (value: boolean) => void;
+  onReset: () => void;
+  onOpenCase: (id: string) => void;
+  onEdit: (entry: Entry) => void;
+}) {
+  const advancedCount = Number(classFilter !== "全部班級") + Number(kindFilter !== "全部類型") + Number(categoryFilter !== "全部事項") + Number(statusFilter !== "全部狀態") + Number(assigneeFilter !== ALL_ASSIGNEES) + Number(Boolean(dateFrom)) + Number(Boolean(dateTo));
+  return <section className="card table-card">
+    <div className="table-heading">
+      <div><small>CONDUCT RECORDS</small><h2>全部紀錄 <b>{entries.length}</b></h2></div>
+      <div className="filters list-toolbar">
+        <label className="search"><Search size={16}/><input aria-label="搜尋紀錄" placeholder="搜尋學生、學號或事項" value={search} onChange={(event) => onSearch(event.target.value)}/></label>
+        <label className="select toolbar-select"><ArrowUpDown size={15}/><select aria-label="紀錄排序" value={sort} onChange={(event) => onSortChange(event.target.value as RecordSort)}>
+          <option value="date-desc">日期：最新</option><option value="date-asc">日期：最舊</option><option value="updated-desc">最近活動</option><option value="student-asc">班級及座號</option><option value="status-priority">跟進狀態</option>
+        </select></label>
+        <button type="button" className={"advanced-toggle" + (filtersOpen ? " active" : "")} aria-expanded={filtersOpen} aria-controls="record-advanced-filters" onClick={() => onFiltersOpenChange(!filtersOpen)}><SlidersHorizontal size={15}/>進階篩選{advancedCount > 0 && <b>{advancedCount}</b>}</button>
+      </div>
+    </div>
+    {filtersOpen && <div className="advanced-filter-panel" id="record-advanced-filters">
+      <div className="advanced-filter-head"><div><strong>篩選訓育紀錄</strong><span>所有條件會同時套用</span></div><button type="button" onClick={onReset}><RotateCcw size={14}/>重設</button></div>
+      <div className="advanced-filter-grid">
+        <label className="filter-field"><span>班級</span><select value={classFilter} onChange={(event) => onClassFilterChange(event.target.value)}>{classes.map((item) => <option key={item}>{item}</option>)}</select></label>
+        <label className="filter-field"><span>紀錄類型</span><select value={kindFilter} onChange={(event) => onKindFilterChange(event.target.value)}><option>全部類型</option><option>嘉許</option><option>提醒</option><option>違規</option></select></label>
+        <label className="filter-field"><span>事項分類</span><select value={categoryFilter} onChange={(event) => onCategoryFilterChange(event.target.value)}>{recordCategories.map((item) => <option key={item}>{item}</option>)}</select></label>
+        <label className="filter-field"><span>個案狀態</span><select value={statusFilter} onChange={(event) => onStatusFilterChange(event.target.value)}><option>全部狀態</option><option>待跟進</option><option>跟進中</option><option>已結案</option></select></label>
+        <label className="filter-field"><span>負責人</span><select value={assigneeFilter} onChange={(event) => onAssigneeFilterChange(event.target.value)}>{assignees.map((item) => <option value={item} key={item}>{assigneeOptionLabel(item)}</option>)}</select></label>
+        <div className="date-range-group"><span>紀錄日期</span><div><label><span className="sr-only">開始日期</span><input type="date" value={dateFrom} max={dateTo || undefined} onChange={(event) => onDateFromChange(event.target.value)}/></label><i>至</i><label><span className="sr-only">結束日期</span><input type="date" value={dateTo} min={dateFrom || undefined} onChange={(event) => onDateToChange(event.target.value)}/></label></div></div>
+      </div>
+      {dateRangeInvalid && <p className="filter-error" role="alert">開始日期不可遲於結束日期；修正前暫不套用日期條件。</p>}
+    </div>}
+    <FilterSummary labels={activeFilters} onReset={onReset}/>
+    <div className="table-scroll"><table className="records-table"><thead><tr><th>日期 / 學生</th><th>類型</th><th>事項</th><th>狀態</th><th>操作</th></tr></thead><tbody>{entries.map((entry) => {
+      const student = studentMap.get(entry.studentId)!;
+      return <tr key={entry.id}><td><div className="person"><Avatar student={student}/><div><strong>{student.name} <span>· {student.className}</span></strong><small>{dateLabel(entry.date)} · {student.number}</small></div></div></td><td><KindTag kind={entry.kind}/></td><td><strong>{entry.category}</strong><small className="entry-note">{entry.note}</small></td><td><StatusTag status={entry.status}/></td><td><div className="actions"><button type="button" className="row-button" onClick={() => onOpenCase(entry.id)}><ChevronRight size={15}/>詳情</button><button type="button" className="row-button" onClick={() => onEdit(entry)}><FilePenLine size={15}/>編輯</button></div></td></tr>;
+    })}</tbody></table>{!entries.length && <Empty text="沒有符合條件的紀錄" hint="可清除條件後重新查看全部紀錄。" onReset={activeFilters.length ? onReset : undefined}/>}</div>
+    <div className="table-foot" aria-live="polite">顯示 {entries.length} / {totalCount} 筆紀錄 <span>資料僅供介面示範</span></div>
+  </section>;
+}
+
+function TodoCenter({ todos, studentMap, today, scope, filter, search, sort, classFilter, kindFilter, statusFilter, assigneeFilter, filtersOpen, activeFilters, classes, assignees, openCount, completedCount, overdueCount, todayCount, unscheduledCount, onSearch, onSortChange, onClassFilterChange, onKindFilterChange, onStatusFilterChange, onAssigneeFilterChange, onFiltersOpenChange, onReset, onScopeChange, onFilterChange, onOpenCase, onStart }: {
   todos: Entry[];
   studentMap: Map<string, Student>;
   today: string;
   scope: TodoScope;
   filter: TodoFilter;
   search: string;
+  sort: TodoSort;
+  classFilter: string;
+  kindFilter: string;
+  statusFilter: string;
+  assigneeFilter: string;
+  filtersOpen: boolean;
+  activeFilters: string[];
+  classes: string[];
+  assignees: string[];
   openCount: number;
   completedCount: number;
   overdueCount: number;
   todayCount: number;
   unscheduledCount: number;
   onSearch: (value: string) => void;
+  onSortChange: (value: TodoSort) => void;
+  onClassFilterChange: (value: string) => void;
+  onKindFilterChange: (value: string) => void;
+  onStatusFilterChange: (value: string) => void;
+  onAssigneeFilterChange: (value: string) => void;
+  onFiltersOpenChange: (value: boolean) => void;
+  onReset: () => void;
   onScopeChange: (scope: TodoScope) => void;
   onFilterChange: (filter: TodoFilter) => void;
   onOpenCase: (id: string) => void;
   onStart: (id: string) => void;
 }) {
-  const filterLabels: Record<TodoFilter, string> = { all: "全部", overdue: "已逾期", today: "今日到期", unscheduled: "未設期限" };
-  const emptyHint = search ? "請更改搜尋字詞。" : scope === "completed" ? "完成個案結案後，會在這裡保留記錄。" : filter === "all" ? "目前沒有需要處理的個案。" : `目前沒有「${filterLabels[filter]}」的待辦。`;
+  const filterLabels: Record<TodoFilter, string> = { all: "全部", overdue: "已逾期", today: "今日到期", next7: "未來 7 日", unscheduled: "未設期限" };
+  const emptyHint = activeFilters.length ? "目前的條件沒有相符結果，可清除條件再試。" : scope === "completed" ? "完成個案結案後，會在這裡保留記錄。" : "目前沒有需要處理的個案。";
+  const totalCount = scope === "open" ? openCount : completedCount;
+  const advancedCount = Number(classFilter !== "全部班級") + Number(kindFilter !== "全部類型") + Number(scope === "open" && statusFilter !== "全部狀態") + Number(assigneeFilter !== ALL_ASSIGNEES);
 
   return <>
     <section className="todo-summary" aria-label="待辦摘要">
@@ -331,12 +676,26 @@ function TodoCenter({ todos, studentMap, today, scope, filter, search, openCount
           <button type="button" role="tab" aria-selected={scope === "open"} className={scope === "open" ? "active" : ""} onClick={() => onScopeChange("open")}>進行中 <b>{openCount}</b></button>
           <button type="button" role="tab" aria-selected={scope === "completed"} className={scope === "completed" ? "active" : ""} onClick={() => onScopeChange("completed")}>已完成 <b>{completedCount}</b></button>
         </div>
-        <label className="search todo-search"><Search size={16}/><input aria-label="搜尋待辦" placeholder="搜尋學生、學號或事項" value={search} onChange={(event) => onSearch(event.target.value)}/></label>
+        <div className="todo-toolbar">
+          <label className="search todo-search"><Search size={16}/><input aria-label="搜尋待辦" placeholder="搜尋學生、學號或事項" value={search} onChange={(event) => onSearch(event.target.value)}/></label>
+          <label className="select toolbar-select"><ArrowUpDown size={15}/><select aria-label="待辦排序" value={sort} onChange={(event) => onSortChange(event.target.value as TodoSort)}><option value="priority">{scope === "open" ? "處理優先度" : "結案日期：最新"}</option><option value="updated-desc">最近更新</option><option value="student-asc">學生姓名</option><option value="class-asc">班級及座號</option></select></label>
+          <button type="button" className={"advanced-toggle" + (filtersOpen ? " active" : "")} aria-expanded={filtersOpen} aria-controls="todo-advanced-filters" onClick={() => onFiltersOpenChange(!filtersOpen)}><SlidersHorizontal size={15}/>進階篩選{advancedCount > 0 && <b>{advancedCount}</b>}</button>
+        </div>
       </div>
       {scope === "open" && <div className="todo-filterbar" aria-label="期限篩選">
         {(Object.keys(filterLabels) as TodoFilter[]).map((key) => <button type="button" key={key} className={filter === key ? "active" : ""} aria-pressed={filter === key} onClick={() => onFilterChange(key)}>{filterLabels[key]}</button>)}
-        <span>按期限排序，逾期項目置頂。</span>
+        <span>快速篩選跟進期限</span>
       </div>}
+      {filtersOpen && <div className="advanced-filter-panel" id="todo-advanced-filters">
+        <div className="advanced-filter-head"><div><strong>篩選待辦個案</strong><span>所有條件會同時套用</span></div><button type="button" onClick={onReset}><RotateCcw size={14}/>重設</button></div>
+        <div className="advanced-filter-grid todo-advanced-grid">
+          <label className="filter-field"><span>班級</span><select value={classFilter} onChange={(event) => onClassFilterChange(event.target.value)}>{classes.map((item) => <option key={item}>{item}</option>)}</select></label>
+          <label className="filter-field"><span>紀錄類型</span><select value={kindFilter} onChange={(event) => onKindFilterChange(event.target.value)}><option>全部類型</option><option>嘉許</option><option>提醒</option><option>違規</option></select></label>
+          <label className="filter-field"><span>個案狀態</span><select value={scope === "completed" ? "全部狀態" : statusFilter} disabled={scope === "completed"} onChange={(event) => onStatusFilterChange(event.target.value)}><option>全部狀態</option><option>待跟進</option><option>跟進中</option></select></label>
+          <label className="filter-field"><span>負責人</span><select value={assigneeFilter} onChange={(event) => onAssigneeFilterChange(event.target.value)}>{assignees.map((item) => <option value={item} key={item}>{assigneeOptionLabel(item)}</option>)}</select></label>
+        </div>
+      </div>}
+      <FilterSummary labels={activeFilters} onReset={onReset}/>
       <div className="todo-list">
         {todos.map((entry) => {
           const student = studentMap.get(entry.studentId);
@@ -354,9 +713,9 @@ function TodoCenter({ todos, studentMap, today, scope, filter, search, openCount
             </div>
           </article>;
         })}
-        {!todos.length && <div className="todo-empty"><CheckCircle2 size={27}/><strong>{scope === "completed" ? "沒有已完成個案" : "這個清單已清空"}</strong><p>{emptyHint}</p></div>}
+        {!todos.length && <div className="todo-empty"><CheckCircle2 size={27}/><strong>{scope === "completed" ? "沒有相符的已完成個案" : "這個清單已清空"}</strong><p>{emptyHint}</p>{activeFilters.length > 0 && <button type="button" className="btn secondary" onClick={onReset}><RotateCcw size={14}/>清除條件</button>}</div>}
       </div>
-      <div className="todo-board-foot"><ShieldCheck size={15}/><span>完成待辦時需在個案詳情填寫結案摘要，處理結果會保留在學生時間線。</span><b>顯示 {todos.length} 項</b></div>
+      <div className="todo-board-foot"><ShieldCheck size={15}/><span>完成待辦時需在個案詳情填寫結案摘要，處理結果會保留在學生時間線。</span><b aria-live="polite">顯示 {todos.length} / {totalCount} 項</b></div>
     </section>
   </>;
 }
@@ -443,4 +802,4 @@ function CasePanel({ entry, student, onClose, onEdit, onSavePlan, onStart, onAdd
 function Stat({ icon: Icon, color, value, label, hint }: { icon: typeof UsersRound; color: string; value: number; label: string; hint: string }) {
   return <section className="stat"><div className="stat-top"><span className={"stat-icon " + color}><Icon size={20}/></span><small>{hint}</small></div><strong>{String(value).padStart(2, "0")}</strong><p>{label}</p></section>;
 }
-function Empty({ text, hint }: { text: string; hint: string }) { return <div className="empty"><Search size={23}/><strong>{text}</strong><p>{hint}</p></div>; }
+function Empty({ text, hint, onReset }: { text: string; hint: string; onReset?: () => void }) { return <div className="empty"><Search size={23}/><strong>{text}</strong><p>{hint}</p>{onReset && <button type="button" className="btn secondary" onClick={onReset}><RotateCcw size={14}/>清除條件</button>}</div>; }
