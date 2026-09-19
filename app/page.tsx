@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import { ArrowRight, ArrowUpDown, BookOpenCheck, CalendarDays, Check, CheckCircle2, ChevronDown, ChevronRight, ClipboardList, Clock3, FilePenLine, Filter, HeartHandshake, LayoutDashboard, Menu, Plus, RotateCcw, Search, ShieldCheck, SlidersHorizontal, Sparkles, UsersRound, X } from "lucide-react";
 
 type Page = "dashboard" | "todos" | "students" | "records";
@@ -22,9 +22,11 @@ type TimelineEvent = {
 };
 type Entry = {
   id: string; studentId: string; kind: Kind; category: string; date: string; note: string; status: Status;
-  assignee?: string; dueDate?: string; followUps?: FollowUp[]; resolution?: string; closedAt?: string; closureHistory?: Closure[];
+  batchId?: string; assignee?: string; dueDate?: string; followUps?: FollowUp[]; resolution?: string; closedAt?: string; closureHistory?: Closure[];
 };
 type Draft = Pick<Entry, "studentId" | "kind" | "category" | "date" | "note" | "status">;
+type BatchDraft = Pick<Entry, "kind" | "category" | "date" | "note"> & { needsFollowUp: boolean; assignee: string; dueDate: string };
+type BatchStep = "students" | "details" | "review";
 const ALL_ASSIGNEES = "__filter_all_assignees__";
 const UNASSIGNED = "__filter_unassigned__";
 
@@ -58,7 +60,11 @@ const newDraft = (): Draft => ({
   studentId: students[0].id, kind: "嘉許", category: "服務精神",
   date: currentLocalDate(), note: "", status: "待跟進",
 });
+const newBatchDraft = (): BatchDraft => ({
+  kind: "嘉許", category: "服務精神", date: currentLocalDate(), note: "", needsFollowUp: false, assignee: "", dueDate: "",
+});
 const dateLabel = (date: string) => date.replaceAll("-", "/");
+const normalizeRecordNote = (note: string) => note.trim().replace(/\s+/g, " ");
 const assigneeOptionLabel = (value: string) => value === ALL_ASSIGNEES ? "全部負責人" : value === UNASSIGNED ? "未指定" : value;
 const latestActivityDate = (entry: Entry) => {
   const dates = [entry.date, entry.closedAt, ...(entry.followUps ?? []).map((item) => item.date), ...(entry.closureHistory ?? []).map((item) => item.date)].filter(Boolean) as string[];
@@ -140,14 +146,27 @@ export default function Home() {
   const [formOpen, setFormOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draft, setDraft] = useState<Draft>(newDraft);
+  const [batchFormOpen, setBatchFormOpen] = useState(false);
+  const [batchStep, setBatchStep] = useState<BatchStep>("students");
+  const [batchDraft, setBatchDraft] = useState<BatchDraft>(newBatchDraft);
+  const [batchStudentIds, setBatchStudentIds] = useState<string[]>([]);
+  const [batchClassFilter, setBatchClassFilter] = useState("全部班級");
+  const [batchSearch, setBatchSearch] = useState("");
+  const [batchSkipDuplicates, setBatchSkipDuplicates] = useState(true);
+  const [batchError, setBatchError] = useState("");
+  const [undoBatch, setUndoBatch] = useState<{ id: string; count: number } | null>(null);
   const [notice, setNotice] = useState("");
   const [today, setToday] = useState(currentLocalDate);
+  const batchButtonRef = useRef<HTMLButtonElement>(null);
+  const batchHasChanges = batchStudentIds.length > 0 || batchDraft.note.trim() !== "" || batchDraft.kind !== "嘉許" ||
+    batchDraft.category !== "服務精神" || batchDraft.date !== today || batchDraft.needsFollowUp ||
+    batchDraft.assignee.trim() !== "" || batchDraft.dueDate !== "";
 
   useEffect(() => {
     if (!notice) return;
-    const timer = window.setTimeout(() => setNotice(""), 3200);
+    const timer = window.setTimeout(() => { setNotice(""); setUndoBatch(null); }, 5200);
     return () => window.clearTimeout(timer);
-  }, [notice]);
+  }, [notice, undoBatch?.id]);
   useEffect(() => {
     let timer = 0;
     const scheduleNextDay = () => {
@@ -159,17 +178,23 @@ export default function Home() {
     return () => window.clearTimeout(timer);
   }, []);
   useEffect(() => {
-    if (!formOpen && !studentId && !caseId) return;
+    if (!formOpen && !batchFormOpen && !studentId && !caseId) return;
     const close = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
-        if (formOpen) setFormOpen(false);
+        if (batchFormOpen) {
+          if (!batchHasChanges || window.confirm("尚未建立的批次內容會被清除，確定離開？")) {
+            setBatchFormOpen(false); setBatchStep("students"); setBatchError("");
+            window.setTimeout(() => batchButtonRef.current?.focus(), 0);
+          }
+        }
+        else if (formOpen) setFormOpen(false);
         else if (caseId) { setCaseId(null); setStudentId(caseReturnStudentId); setCaseReturnStudentId(null); }
         else setStudentId(null);
       }
     };
     window.addEventListener("keydown", close);
     return () => window.removeEventListener("keydown", close);
-  }, [formOpen, studentId, caseId, caseReturnStudentId]);
+  }, [formOpen, batchFormOpen, batchHasChanges, studentId, caseId, caseReturnStudentId]);
 
   const studentMap = useMemo(() => new Map(students.map((s) => [s.id, s])), []);
   const next7Date = addDays(today, 7);
@@ -288,6 +313,19 @@ export default function Home() {
     todoScope === "open" && todoStatusFilter !== "全部狀態" && todoStatusFilter,
     todoAssigneeFilter !== ALL_ASSIGNEES && (todoAssigneeFilter === UNASSIGNED ? "未指定負責人" : todoAssigneeFilter),
   ].filter(Boolean) as string[];
+  const batchQuery = batchSearch.toLocaleLowerCase("zh-Hant").trim();
+  const batchSelectedIdSet = new Set(batchStudentIds);
+  const batchVisibleStudents = students.filter((student) =>
+    (batchClassFilter === "全部班級" || student.className === batchClassFilter) &&
+    (student.name + student.className + student.number + student.seat).toLocaleLowerCase("zh-Hant").includes(batchQuery)
+  ).sort(compareStudentClass);
+  const batchSelectedStudents = students.filter((student) => batchSelectedIdSet.has(student.id)).sort(compareStudentClass);
+  const batchAllVisibleSelected = batchVisibleStudents.length > 0 && batchVisibleStudents.every((student) => batchSelectedIdSet.has(student.id));
+  const batchDuplicateStudentIds = new Set(batchDraft.note.trim() ? batchSelectedStudents.filter((student) => entries.some((entry) =>
+    entry.studentId === student.id && entry.date === batchDraft.date && entry.kind === batchDraft.kind &&
+    entry.category === batchDraft.category && normalizeRecordNote(entry.note) === normalizeRecordNote(batchDraft.note)
+  )).map((student) => student.id) : []);
+  const batchStudentsToCreate = batchSelectedStudents.filter((student) => !batchSkipDuplicates || !batchDuplicateStudentIds.has(student.id));
   const selected = studentId ? studentMap.get(studentId) : undefined;
   const selectedEntries = selected ? entries.filter((e) => e.studentId === selected.id) : [];
   const selectedTimeline = buildStudentTimeline(selectedEntries);
@@ -310,7 +348,74 @@ export default function Home() {
   function navigate(next: Page) { setPage(next); setMenuOpen(false); }
   function addEntry(id?: string) {
     setEditingId(null); setDraft({ ...newDraft(), studentId: id || students[0].id });
-    setStudentId(null); setCaseId(null); setCaseReturnStudentId(null); setFormOpen(true);
+    setStudentId(null); setCaseId(null); setCaseReturnStudentId(null); setBatchFormOpen(false); setFormOpen(true);
+  }
+  function openBatchForm() {
+    setBatchDraft(newBatchDraft()); setBatchStudentIds([]); setBatchClassFilter("全部班級"); setBatchSearch("");
+    setBatchSkipDuplicates(true); setBatchError(""); setBatchStep("students");
+    setStudentId(null); setCaseId(null); setCaseReturnStudentId(null); setFormOpen(false); setBatchFormOpen(true);
+  }
+  function closeBatchForm(skipConfirmation = false) {
+    if (!skipConfirmation && batchHasChanges && !window.confirm("尚未建立的批次內容會被清除，確定離開？")) return;
+    setBatchFormOpen(false); setBatchStep("students"); setBatchError("");
+    window.setTimeout(() => batchButtonRef.current?.focus(), 0);
+  }
+  function toggleBatchStudent(id: string) {
+    setBatchStudentIds((current) => current.includes(id) ? current.filter((studentId) => studentId !== id) : [...current, id]);
+    setBatchError("");
+  }
+  function toggleVisibleBatchStudents() {
+    const visibleIds = new Set(batchVisibleStudents.map((student) => student.id));
+    setBatchStudentIds((current) => batchAllVisibleSelected ? current.filter((id) => !visibleIds.has(id)) : [...new Set([...current, ...visibleIds])]);
+    setBatchError("");
+  }
+  function goToBatchDetails() {
+    if (!batchSelectedStudents.length) { setBatchError("請至少選擇 1 位學生。"); return; }
+    setBatchError(""); setBatchStep("details");
+  }
+  function reviewBatchEntries(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!batchSelectedStudents.length) { setBatchError("學生名單已失效，請返回重新選擇。"); setBatchStep("students"); return; }
+    if (!categories[batchDraft.kind].includes(batchDraft.category)) { setBatchError("事項分類與紀錄類型不相符。"); return; }
+    if (!batchDraft.date || batchDraft.date > today) { setBatchError("紀錄日期不可遲於今天。"); return; }
+    if (!batchDraft.note.trim()) { setBatchError("請填寫內容說明。"); return; }
+    if (batchDraft.needsFollowUp && batchDraft.dueDate && batchDraft.dueDate < batchDraft.date) { setBatchError("跟進期限不可早於紀錄日期。"); return; }
+    setBatchError(""); setBatchStep("review");
+  }
+  function confirmBatchEntries() {
+    if (!batchStudentsToCreate.length) { setBatchError("所選學生已有完全相同的紀錄；請返回修改，或取消略過重複紀錄。"); return; }
+    const createdAt = Date.now();
+    const createdAtIso = new Date(createdAt).toISOString();
+    const batchId = "b" + createdAt;
+    const note = batchDraft.note.trim();
+    const closureSummary = "此紀錄在批次建立時標記為無需跟進。";
+    const createdEntries: Entry[] = batchStudentsToCreate.map((student, index) => ({
+      id: `${batchId}-${index + 1}`,
+      batchId,
+      studentId: student.id,
+      kind: batchDraft.kind,
+      category: batchDraft.category,
+      date: batchDraft.date,
+      note,
+      status: batchDraft.needsFollowUp ? "待跟進" : "已結案",
+      ...(batchDraft.needsFollowUp ? {
+        assignee: batchDraft.assignee.trim() || undefined,
+        dueDate: batchDraft.dueDate || undefined,
+      } : {
+        resolution: closureSummary,
+        closedAt: today,
+        closureHistory: [{ id: `${batchId}-c-${index + 1}`, date: today, at: createdAtIso, summary: closureSummary }],
+      }),
+    }));
+    setEntries((current) => [...createdEntries, ...current]);
+    setUndoBatch({ id: batchId, count: createdEntries.length });
+    setNotice(`已建立 ${createdEntries.length} 筆批次紀錄`);
+    closeBatchForm(true); resetRecordFilters(); setRecordSort("date-desc"); navigate("records");
+  }
+  function undoLastBatch() {
+    if (!undoBatch) return;
+    setEntries((current) => current.filter((entry) => entry.batchId !== undoBatch.id));
+    setNotice(`已復原 ${undoBatch.count} 筆批次紀錄`); setUndoBatch(null);
   }
   function editEntry(entry: Entry) {
     setEditingId(entry.id);
@@ -394,7 +499,7 @@ export default function Home() {
     <div className="main">
       <header className="topbar"><button type="button" className="mobile-menu" aria-label="開啟選單" onClick={() => setMenuOpen(true)}><Menu size={21}/></button><div className="crumb">校園管理 <ChevronRight size={14}/> <strong>{title}</strong></div><div className="top-meta"><span><CalendarDays size={15}/> 2026–27 學年</span><b><i/> 示範版</b></div></header>
       <main className="content">
-        <div className="page-heading"><div><small>STUDENT AFFAIRS / 訓育管理</small><h1>{title}</h1><p>{subtitle}</p></div><button type="button" className="btn primary" onClick={() => addEntry()}><Plus size={17}/>新增紀錄</button></div>
+        <div className="page-heading"><div><small>STUDENT AFFAIRS / 訓育管理</small><h1>{title}</h1><p>{subtitle}</p></div><div className="page-actions">{page === "records" && <button ref={batchButtonRef} type="button" className="btn secondary" onClick={openBatchForm}><UsersRound size={17}/>批次建立</button>}<button type="button" className="btn primary" onClick={() => addEntry()}><Plus size={17}/>新增紀錄</button></div></div>
         {page === "dashboard" && <>
           <section className="hero"><div className="hero-copy"><span><Sparkles size={15}/> 2026–27 學年 · 訓育概況</span><h2>讓每一份關注，<br/><em>都有清楚的紀錄。</em></h2><p>從嘉許到跟進事項，在同一處掌握學生的校園成長。</p><button type="button" onClick={() => navigate("records")}>查看所有紀錄 <ArrowRight size={16}/></button></div><div className="hero-art" aria-hidden="true"><div className="orbit"/><div className="paper behind"/><div className="paper front"><ShieldCheck size={28}/><i/><i/><i/></div><span>✦</span></div></section>
           <div className="stats">
@@ -497,8 +602,155 @@ export default function Home() {
     </div>
     {selected && <div className="overlay" onMouseDown={(e) => { if (e.target === e.currentTarget) setStudentId(null); }}><section className="panel" role="dialog" aria-modal="true" aria-labelledby="student-title"><div className="panel-head"><div><small>STUDENT PROFILE</small><h2 id="student-title">學生資料</h2></div><button type="button" aria-label="關閉學生資料" onClick={() => setStudentId(null)}><X size={20}/></button></div><div className="panel-body"><div className="profile"><Avatar student={selected} large/><div><h3>{selected.name}</h3><p>{selected.className} · 座號 {selected.seat}</p></div></div><div className="profile-facts"><div><span>學號</span><strong>{selected.number}</strong></div><div><span>班級</span><strong>{selected.className}</strong></div><div><span>紀錄總數</span><strong>{selectedEntries.length} 筆</strong></div></div><h3 className="block-title">個人紀錄時間線 <span>{selectedTimeline.length} 項事件</span></h3><p className="timeline-intro">按日期查看紀錄、跟進與結案；紀錄總數指個案數目。</p><StudentTimeline events={selectedTimeline} onOpenCase={openCase}/></div><div className="panel-foot"><button type="button" className="btn primary wide" onClick={() => addEntry(selected.id)}><Plus size={17}/>為此學生新增紀錄</button></div></section></div>}
     {formOpen && <div className="overlay" onMouseDown={(e) => { if (e.target === e.currentTarget) setFormOpen(false); }}><section className="panel" role="dialog" aria-modal="true" aria-labelledby="form-title"><div className="panel-head"><div><small>CONDUCT RECORD</small><h2 id="form-title">{editingId ? "編輯訓育紀錄" : "新增訓育紀錄"}</h2></div><button type="button" aria-label="關閉表單" onClick={() => setFormOpen(false)}><X size={20}/></button></div><form className="entry-form" onSubmit={saveEntry}><div className="panel-body"><p className="form-intro">記下學生的正向表現或需要跟進的事項，讓處理過程更清晰。</p><div className="field-row"><label className="field"><span>班別 *</span><select value={draftStudent.className} onChange={(e) => { const first = students.find((s) => s.className === e.target.value); if (first) setDraft({ ...draft, studentId: first.id }); }} required>{classes.slice(1).map((className) => <option key={className}>{className}</option>)}</select></label><label className="field"><span>學生姓名 *</span><select value={draft.studentId} onChange={(e) => setDraft({ ...draft, studentId: e.target.value })} required>{draftClassStudents.map((s) => <option value={s.id} key={s.id}>{s.name}</option>)}</select></label></div><label className="field"><span>學號</span><input value={draftStudent.number} readOnly aria-describedby="student-number-help"/><small id="student-number-help">由學生名冊自動帶入</small></label><div className="field-row"><label className="field"><span>紀錄類型 *</span><select value={draft.kind} onChange={(e) => { const kind = e.target.value as Kind; setDraft({ ...draft, kind, category: categories[kind][0] }); }}><option>嘉許</option><option>提醒</option><option>違規</option></select></label><label className="field"><span>日期 *</span><input type="date" value={draft.date} onChange={(e) => setDraft({ ...draft, date: e.target.value })} required/></label></div><label className="field"><span>事項分類 *</span><select value={draft.category} onChange={(e) => setDraft({ ...draft, category: e.target.value })}>{categories[draft.kind].map((c) => <option key={c}>{c}</option>)}</select></label><label className="field"><span>內容說明 *</span><textarea rows={5} maxLength={300} placeholder="簡述事件、已採取的行動或後續安排…" value={draft.note} onChange={(e) => setDraft({ ...draft, note: e.target.value })} required/><small>{draft.note.length}/300 字</small></label><p className="form-warning"><ShieldCheck size={16}/> 這是前端示範版。資料只會在目前頁面暫時顯示。</p></div><div className="panel-foot"><button type="button" className="btn secondary" onClick={() => setFormOpen(false)}>取消</button><button type="submit" className="btn primary"><Check size={17}/>{editingId ? "儲存變更" : "建立紀錄"}</button></div></form></section></div>}
+    {batchFormOpen && <BatchRecordPanel
+      step={batchStep}
+      draft={batchDraft}
+      visibleStudents={batchVisibleStudents}
+      selectedStudents={batchSelectedStudents}
+      selectedIds={batchSelectedIdSet}
+      duplicateIds={batchDuplicateStudentIds}
+      allVisibleSelected={batchAllVisibleSelected}
+      classFilter={batchClassFilter}
+      search={batchSearch}
+      classes={classes}
+      skipDuplicates={batchSkipDuplicates}
+      createCount={batchStudentsToCreate.length}
+      error={batchError}
+      today={today}
+      onClose={() => closeBatchForm()}
+      onStepChange={(next) => { setBatchError(""); setBatchStep(next); }}
+      onClassFilterChange={setBatchClassFilter}
+      onSearch={setBatchSearch}
+      onToggleStudent={toggleBatchStudent}
+      onToggleVisible={toggleVisibleBatchStudents}
+      onClearSelection={() => { setBatchStudentIds([]); setBatchError(""); }}
+      onDraftChange={(patch) => { setBatchDraft((current) => ({ ...current, ...patch })); setBatchError(""); }}
+      onSkipDuplicatesChange={setBatchSkipDuplicates}
+      onNextStudents={goToBatchDetails}
+      onSubmitDetails={reviewBatchEntries}
+      onConfirm={confirmBatchEntries}
+    />}
     {selectedCase && caseStudent && <CasePanel key={selectedCase.id} entry={selectedCase} student={caseStudent} onClose={closeCaseView} onEdit={() => editEntry(selectedCase)} onSavePlan={saveCasePlan} onStart={startCase} onAddFollowUp={addFollowUp} onCloseCase={closeCase} onReopen={reopenCase}/>}
-    {notice && <div className="toast" role="status"><CheckCircle2 size={18}/>{notice}<button type="button" aria-label="關閉通知" onClick={() => setNotice("")}><X size={14}/></button></div>}
+    {notice && <div className="toast" role="status"><CheckCircle2 size={18}/>{notice}{undoBatch && notice === `已建立 ${undoBatch.count} 筆批次紀錄` && <button type="button" className="toast-action" onClick={undoLastBatch}>復原</button>}<button type="button" aria-label="關閉通知" onClick={() => { setNotice(""); setUndoBatch(null); }}><X size={14}/></button></div>}
+  </div>;
+}
+
+type BatchRecordPanelProps = {
+  step: BatchStep;
+  draft: BatchDraft;
+  visibleStudents: Student[];
+  selectedStudents: Student[];
+  selectedIds: Set<string>;
+  duplicateIds: Set<string>;
+  allVisibleSelected: boolean;
+  classFilter: string;
+  search: string;
+  classes: string[];
+  skipDuplicates: boolean;
+  createCount: number;
+  error: string;
+  today: string;
+  onClose: () => void;
+  onStepChange: (step: BatchStep) => void;
+  onClassFilterChange: (value: string) => void;
+  onSearch: (value: string) => void;
+  onToggleStudent: (id: string) => void;
+  onToggleVisible: () => void;
+  onClearSelection: () => void;
+  onDraftChange: (patch: Partial<BatchDraft>) => void;
+  onSkipDuplicatesChange: (value: boolean) => void;
+  onNextStudents: () => void;
+  onSubmitDetails: (event: FormEvent<HTMLFormElement>) => void;
+  onConfirm: () => void;
+};
+
+function BatchRecordPanel({
+  step, draft, visibleStudents, selectedStudents, selectedIds, duplicateIds, allVisibleSelected,
+  classFilter, search, classes, skipDuplicates, createCount, error, today, onClose, onStepChange,
+  onClassFilterChange, onSearch, onToggleStudent, onToggleVisible, onClearSelection, onDraftChange,
+  onSkipDuplicatesChange, onNextStudents, onSubmitDetails, onConfirm,
+}: BatchRecordPanelProps) {
+  const stepContentRef = useRef<HTMLDivElement>(null);
+  const steps: { id: BatchStep; label: string }[] = [
+    { id: "students", label: "選擇學生" },
+    { id: "details", label: "填寫內容" },
+    { id: "review", label: "核對建立" },
+  ];
+  const stepIndex = steps.findIndex((item) => item.id === step);
+  const duplicateCount = duplicateIds.size;
+  const displayedSelected = selectedStudents.slice(0, 6);
+  useEffect(() => {
+    if (step !== "students") stepContentRef.current?.focus();
+  }, [step]);
+  function trapDialogFocus(event: ReactKeyboardEvent<HTMLElement>) {
+    if (event.key !== "Tab") return;
+    const focusable = [...event.currentTarget.querySelectorAll<HTMLElement>('button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])')];
+    if (!focusable.length) return;
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+    else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+  }
+
+  return <div className="overlay" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
+    <section className="panel batch-panel" role="dialog" aria-modal="true" aria-labelledby="batch-form-title" onKeyDown={trapDialogFocus}>
+      <div className="panel-head"><div><small>BATCH RECORDS</small><h2 id="batch-form-title">批次建立訓育紀錄</h2></div><button type="button" aria-label="關閉批次建立" onClick={onClose}><X size={20}/></button></div>
+      <div className="batch-steps" aria-label="批次建立步驟">{steps.map((item, index) => <div key={item.id} className={(index === stepIndex ? "active" : "") + (index < stepIndex ? " done" : "")}><b>{index < stepIndex ? <Check size={13}/> : index + 1}</b><span>{item.label}</span></div>)}</div>
+
+      {step === "students" && <div className="entry-form">
+        <div className="panel-body batch-body" ref={stepContentRef}>
+          <p className="form-intro">先選擇需要加入同一事項的學生。切換班級或搜尋時，已選名單會保留。</p>
+          <div className="batch-student-toolbar">
+            <label className="field"><span>班別</span><select value={classFilter} onChange={(event) => onClassFilterChange(event.target.value)}>{classes.map((className) => <option key={className}>{className}</option>)}</select></label>
+            <label className="batch-search"><Search size={16}/><input autoFocus aria-label="搜尋批次學生" placeholder="搜尋姓名、學號或座號" value={search} onChange={(event) => onSearch(event.target.value)}/></label>
+          </div>
+          <div className="batch-picker-head"><div><strong>學生名單</strong><span aria-live="polite">目前顯示 {visibleStudents.length} 位</span></div><div><button type="button" onClick={onToggleVisible} disabled={!visibleStudents.length}>{allVisibleSelected ? "取消目前名單" : "選取目前名單"}</button><button type="button" onClick={onClearSelection} disabled={!selectedStudents.length}>清除已選</button></div></div>
+          <div className="batch-student-list" aria-label="可選學生">
+            {visibleStudents.map((student) => <label key={student.id} className={"batch-student-row" + (selectedIds.has(student.id) ? " selected" : "")}>
+              <input type="checkbox" checked={selectedIds.has(student.id)} onChange={() => onToggleStudent(student.id)}/>
+              <Avatar student={student}/>
+              <span><strong>{student.name}</strong><small>{student.className} · 座號 {student.seat}</small></span>
+              <em>{student.number}</em>
+            </label>)}
+            {!visibleStudents.length && <div className="batch-empty"><Search size={20}/><strong>找不到學生</strong><span>請更改班別或搜尋字詞。</span></div>}
+          </div>
+          <div className="batch-selected-summary" aria-live="polite"><div><strong>已選 {selectedStudents.length} 位學生</strong><span>可跨班選擇</span></div>{selectedStudents.length > 0 && <section>{displayedSelected.map((student) => <span key={student.id}>{student.className} · {student.name}</span>)}{selectedStudents.length > displayedSelected.length && <b>另有 {selectedStudents.length - displayedSelected.length} 位</b>}</section>}</div>
+          {error && <p className="batch-error" role="alert">{error}</p>}
+        </div>
+        <div className="panel-foot"><button type="button" className="btn secondary" onClick={onClose}>取消</button><button type="button" className="btn primary" onClick={onNextStudents}>下一步：填寫內容 <ArrowRight size={16}/></button></div>
+      </div>}
+
+      {step === "details" && <form className="entry-form" onSubmit={onSubmitDetails}>
+        <div className="panel-body batch-body" ref={stepContentRef} tabIndex={-1} aria-label="批次建立第 2 步：填寫內容">
+          <p className="form-intro">以下內容會分別加入 {selectedStudents.length} 位學生的個人紀錄；每筆紀錄之後可獨立修改及跟進。</p>
+          <div className="field-row"><label className="field"><span>紀錄類型 *</span><select value={draft.kind} onChange={(event) => { const kind = event.target.value as Kind; onDraftChange({ kind, category: categories[kind][0], needsFollowUp: kind !== "嘉許" }); }}><option>嘉許</option><option>提醒</option><option>違規</option></select></label><label className="field"><span>日期 *</span><input type="date" max={today} value={draft.date} onChange={(event) => onDraftChange({ date: event.target.value })} required/></label></div>
+          <label className="field"><span>事項分類 *</span><select value={draft.category} onChange={(event) => onDraftChange({ category: event.target.value })}>{categories[draft.kind].map((category) => <option key={category}>{category}</option>)}</select></label>
+          <label className="field"><span>內容說明 *</span><textarea rows={5} maxLength={300} placeholder="輸入所有已選學生共用的事項內容…" value={draft.note} onChange={(event) => onDraftChange({ note: event.target.value })} required/><small>{draft.note.length}/300 字</small></label>
+          <fieldset className="batch-follow-field"><legend>建立後是否需要跟進？</legend><div className="batch-follow-options">
+            <label className={!draft.needsFollowUp ? "active" : ""}><input type="radio" name="batch-follow-up" checked={!draft.needsFollowUp} onChange={() => onDraftChange({ needsFollowUp: false })}/><span><strong>無需跟進</strong><small>建立後列為已結案，不會加入待辦中心</small></span></label>
+            <label className={draft.needsFollowUp ? "active" : ""}><input type="radio" name="batch-follow-up" checked={draft.needsFollowUp} onChange={() => onDraftChange({ needsFollowUp: true })}/><span><strong>需要跟進</strong><small>每位學生各自建立一項待辦</small></span></label>
+          </div></fieldset>
+          {draft.needsFollowUp && <div className="batch-follow-fields"><div className="field-row"><label className="field"><span>共同負責人</span><input maxLength={40} placeholder="例如：中一級班主任" value={draft.assignee} onChange={(event) => onDraftChange({ assignee: event.target.value })}/></label><label className="field"><span>共同跟進期限</span><input type="date" min={draft.date} value={draft.dueDate} onChange={(event) => onDraftChange({ dueDate: event.target.value })}/></label></div><small>兩項均可留空，之後可在個案詳情逐筆安排。</small></div>}
+          {error && <p className="batch-error" role="alert">{error}</p>}
+          <p className="form-warning"><ShieldCheck size={16}/> 建立後會產生 {selectedStudents.length} 筆獨立紀錄；下一步可再次核對名單及內容。</p>
+        </div>
+        <div className="panel-foot"><button type="button" className="btn secondary" onClick={() => onStepChange("students")}>返回選擇</button><button type="submit" className="btn primary">下一步：核對紀錄 <ArrowRight size={16}/></button></div>
+      </form>}
+
+      {step === "review" && <div className="entry-form">
+        <div className="panel-body batch-body" ref={stepContentRef} tabIndex={-1} aria-label="批次建立第 3 步：核對建立">
+          <div className="batch-review-hero"><span><ClipboardList size={23}/></span><div><small>準備建立</small><strong>{createCount} 筆獨立紀錄</strong><p>建立後，每位學生的時間線及個案會分開顯示。</p></div></div>
+          <div className="batch-review-grid"><div><span>日期</span><strong>{dateLabel(draft.date)}</strong></div><div><span>類型／分類</span><strong><KindTag kind={draft.kind}/> {draft.category}</strong></div><div><span>跟進狀態</span><strong>{draft.needsFollowUp ? "待跟進" : "無需跟進（已結案）"}</strong></div>{draft.needsFollowUp && <><div><span>負責人</span><strong>{draft.assignee.trim() || "未指定"}</strong></div><div><span>跟進期限</span><strong>{draft.dueDate ? dateLabel(draft.dueDate) : "未設定"}</strong></div></>}</div>
+          <div className="batch-review-note"><span>內容說明</span><p>{draft.note.trim()}</p></div>
+          <div className="batch-review-list-head"><div><strong>學生名單</strong><span>{selectedStudents.length} 位</span></div>{duplicateCount > 0 && <b>{duplicateCount} 筆可能重複</b>}</div>
+          <div className="batch-review-list">{selectedStudents.map((student) => <div key={student.id} className={duplicateIds.has(student.id) ? "duplicate" : ""}><Avatar student={student}/><span><strong>{student.name}</strong><small>{student.className} · 座號 {student.seat} · {student.number}</small></span>{duplicateIds.has(student.id) ? <em>{skipDuplicates ? "將略過" : "仍會建立"}</em> : <CheckCircle2 size={17}/>}</div>)}</div>
+          {duplicateCount > 0 && <label className="batch-duplicate-option"><input type="checkbox" checked={skipDuplicates} onChange={(event) => onSkipDuplicatesChange(event.target.checked)}/><span><strong>略過 {duplicateCount} 筆完全重複紀錄</strong><small>同一學生、日期、類型、分類及內容完全相同。</small></span></label>}
+          {createCount === 0 && <p className="batch-error" role="alert">全部所選學生已有相同紀錄。請取消「略過重複紀錄」，或返回修改內容。</p>}
+          {error && <p className="batch-error" role="alert">{error}</p>}
+        </div>
+        <div className="panel-foot"><button type="button" className="btn secondary" onClick={() => onStepChange("details")}>返回修改</button><button type="button" className="btn primary" onClick={onConfirm} disabled={createCount === 0}><Check size={17}/>建立 {createCount} 筆紀錄</button></div>
+      </div>}
+    </section>
   </div>;
 }
 
