@@ -81,3 +81,79 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 .timeline-card-foot{padding-top:9px;border-top:1px solid #f0f4f4}
 .timeline-card-foot>span:not(.status-tag){color:#a0b0b4;font-size:10px}
 @media(max-width:430px){.timeline-card{padding:12px}.timeline-item{padding-left:31px}.timeline-card-head{flex-wrap:wrap}.timeline-card-head time{margin-left:auto}}
+
+/* Todo center */
+.nav-count{min-width:24px;height:22px;display:inline-grid;place-items:center;margin-left:auto;padding:0 6px;border-radius:7px;background:#eef4f4;color:#71898f;font-size:10px;font-style:normal;font-weight:800}
+.nav-item.active .nav-count{background:#fff;color:#0c7774}
+.nav-count+i{margin-left:0}
+.todo-summary{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin-bottom:18px}
+.todo-metric{min-width:0;display:flex;align-items:center;gap:13px;padding:17px 18px;border:1px solid #e5edef;border-radius:14px;background:#fff;color:#4e666f;text-align:left;box-shadow:0 4px 16px #20566707;transition:border-color .18s,box-shadow .18s,transform .18s}
+.todo-metric:hover{transform:translateY(-1px);border-color:#cfe1df;box-shadow:0 8px 20px #2056670e}
+.todo-metric.active{border-color:#4ba69c;box-shadow:0 0 0 3px #dff2ee,0 7px 20px #2056670b}
+.todo-metric-icon{width:39px;height:39px;display:grid;place-items:center;flex:none;border-radius:11px;background:#e7f4f1;color:#18877d}
+.todo-metric.red .todo-metric-icon{background:#faeceb;color:#b56c67}
+.todo-metric.gold .todo-metric-icon{background:#fff3e1;color:#b48234}
+.todo-metric.blue .todo-metric-icon{background:#eaf2fb;color:#517fae}
+.todo-metric>span:nth-child(2){min-width:0;display:grid;gap:2px}
+.todo-metric small{color:#71878e;font-size:12px;font-weight:800}
+.todo-metric strong{color:#263f49;font-size:25px;line-height:1.15;letter-spacing:-.04em}
+.todo-metric em{overflow:hidden;color:#9babb0;font-size:10px;font-style:normal;text-overflow:ellipsis;white-space:nowrap}
+.todo-metric>svg{margin-left:auto;color:#adbec1}
+.todo-board{overflow:hidden}
+.todo-board-head{display:flex;align-items:center;justify-content:space-between;gap:18px;padding:20px 22px;border-bottom:1px solid #edf2f3}
+.todo-tabs{display:flex;gap:4px;padding:4px;border-radius:10px;background:#f2f6f6}
+.todo-tabs button{min-height:34px;display:flex;align-items:center;gap:8px;padding:0 13px;border:0;border-radius:7px;background:transparent;color:#82969c;font-size:12px;font-weight:800}
+.todo-tabs button.active{background:#fff;color:#147d77;box-shadow:0 2px 8px #2d5b5f13}
+.todo-tabs b{min-width:21px;height:20px;display:grid;place-items:center;padding:0 5px;border-radius:6px;background:#e5eeee;color:#6d868c;font-size:10px}
+.todo-tabs button.active b{background:#e5f3ef;color:#147d77}
+.todo-search input{width:230px;font-size:12px}
+.todo-filterbar{display:flex;align-items:center;gap:7px;padding:13px 22px;border-bottom:1px solid #edf2f3;background:#fbfcfc}
+.todo-filterbar button{min-height:30px;padding:0 11px;border:1px solid #e2eaeb;border-radius:8px;background:#fff;color:#72888f;font-size:11px;font-weight:800}
+.todo-filterbar button:hover{border-color:#badbd5;color:#187e77}
+.todo-filterbar button.active{border-color:#b9dcd6;background:#eaf5f2;color:#157d75}
+.todo-filterbar>span{margin-left:auto;color:#a1b0b4;font-size:10px}
+.todo-list{background:#fff}
+.todo-item{display:grid;grid-template-columns:minmax(125px,.75fr) minmax(155px,.9fr) minmax(230px,1.6fr) minmax(120px,.8fr) minmax(130px,.8fr);grid-template-areas:"due student content owner actions";align-items:center;gap:18px;min-height:126px;padding:20px 22px;border-left:4px solid #bcded8;border-bottom:1px solid #edf2f3}
+.todo-item:last-child{border-bottom:0}
+.todo-item:hover{background:#fbfdfd}
+.todo-item.overdue{border-left-color:#d5837d;background:linear-gradient(90deg,#fff9f8 0,#fff 20%)}
+.todo-item.today{border-left-color:#d6a453;background:linear-gradient(90deg,#fffaf2 0,#fff 20%)}
+.todo-item.unscheduled{border-left-color:#9baeb3}
+.todo-item.completed{border-left-color:#6eae96;background:#fbfdfc}
+.todo-due{grid-area:due;display:flex;align-items:center;gap:10px;min-width:0}
+.todo-due>span{width:35px;height:35px;display:grid;place-items:center;flex:none;border-radius:10px;background:#e8f5f1;color:#21887d}
+.todo-item.overdue .todo-due>span{background:#faeae8;color:#b7625e}
+.todo-item.today .todo-due>span{background:#fff0d8;color:#b47e29}
+.todo-item.unscheduled .todo-due>span{background:#eff3f4;color:#758c92}
+.todo-item.completed .todo-due>span{background:#e7f4ed;color:#4e927c}
+.todo-due div,.todo-student div{min-width:0}
+.todo-due strong,.todo-due small{display:block}
+.todo-due strong{color:#3a555e;font-size:13px;font-weight:800;white-space:nowrap}
+.todo-item.overdue .todo-due strong{color:#ae5b57}
+.todo-item.today .todo-due strong{color:#a46f25}
+.todo-due small{margin-top:4px;color:#98aaae;font-size:10px;line-height:1.35}
+.todo-student{grid-area:student;display:flex;align-items:center;gap:10px;min-width:0}
+.todo-student strong,.todo-student span,.todo-student small{display:block}
+.todo-student strong{color:#29444e;font-size:14px;font-weight:800}
+.todo-student span{margin-top:3px;color:#627b83;font-size:12px;font-weight:700}
+.todo-student small{margin-top:2px;color:#9aadb2;font-size:10px}
+.todo-content{grid-area:content;min-width:0}
+.todo-content>div{display:flex;align-items:center;gap:6px;margin-bottom:8px}
+.todo-content h3{margin:0;color:#304b55;font-size:14px;font-weight:800}
+.todo-content p{display:-webkit-box;overflow:hidden;margin:5px 0 0;color:#7f949a;font-size:12px;line-height:1.55;-webkit-box-orient:vertical;-webkit-line-clamp:2}
+.todo-owner{grid-area:owner;display:grid;gap:4px;min-width:0}
+.todo-owner>span{color:#9aabb0;font-size:10px}
+.todo-owner strong{overflow:hidden;color:#405b64;font-size:12px;text-overflow:ellipsis;white-space:nowrap}
+.todo-owner strong.missing{color:#aa7d3d}
+.todo-owner small{color:#9dafb3;font-size:10px;line-height:1.4}
+.todo-actions{grid-area:actions;display:grid;gap:7px;justify-items:stretch}
+.todo-actions .btn{width:100%;min-height:35px;padding:0 11px;font-size:11px}
+.todo-empty{display:grid;justify-items:center;gap:8px;padding:64px 20px;color:#63a28f;text-align:center}
+.todo-empty strong{color:#3c5861;font-size:14px}
+.todo-empty p{margin:0;color:#8da2a7;font-size:12px}
+.todo-board-foot{display:flex;align-items:center;gap:8px;padding:13px 22px;border-top:1px solid #e8efef;background:#f8fbfa;color:#75918d;font-size:11px;line-height:1.5}
+.todo-board-foot svg{flex:none;color:#288b80}
+.todo-board-foot b{margin-left:auto;color:#71888e;white-space:nowrap}
+@media(max-width:1200px){.todo-summary{grid-template-columns:repeat(2,minmax(0,1fr))}.todo-item{grid-template-columns:130px 175px minmax(220px,1fr);grid-template-areas:"due student content" "due owner actions";gap:14px 18px}.todo-actions{display:flex;justify-content:flex-end}.todo-actions .btn{width:auto}}
+@media(max-width:720px){.todo-summary{gap:9px;margin-bottom:13px}.todo-metric{padding:13px 12px;gap:9px}.todo-metric-icon{width:34px;height:34px}.todo-metric strong{font-size:22px}.todo-metric>svg{display:none}.todo-board-head{align-items:stretch;flex-direction:column;padding:16px}.todo-tabs button{flex:1;justify-content:center}.todo-search{width:100%}.todo-search input{width:100%}.todo-filterbar{overflow-x:auto;padding:11px 16px}.todo-filterbar button{flex:none}.todo-filterbar>span{display:none}.todo-item{grid-template-columns:1fr;grid-template-areas:"due" "student" "content" "owner" "actions";gap:14px;min-height:0;padding:18px 16px}.todo-due{padding-bottom:12px;border-bottom:1px solid #edf2f3}.todo-owner{grid-template-columns:auto 1fr;align-items:center}.todo-owner small{grid-column:1/-1}.todo-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}.todo-actions .btn{width:100%}.todo-actions .btn:only-child{grid-column:1/-1}.todo-board-foot{align-items:flex-start;flex-wrap:wrap;padding:13px 16px}.todo-board-foot b{width:100%;margin-left:23px}}
+@media(max-width:430px){.todo-summary{grid-template-columns:1fr}.todo-metric{padding:12px 14px}.todo-metric em{white-space:normal}.todo-tabs button{padding:0 9px}.todo-actions{grid-template-columns:1fr}}
