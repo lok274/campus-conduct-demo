@@ -248,4 +248,20 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 .school-score-grid dd{margin:8px 0 0;font-size:1.75rem;font-weight:800;line-height:1.2;font-variant-numeric:tabular-nums;color:#173e3a}
 .school-score-grid dd>span{font-size:.75rem;font-weight:400;color:#62787c}
 .school-base-scores p{margin:12px 0 0;font-size:.8125rem;line-height:1.75;color:#526b6f}
+.rule-picker{min-width:0;margin:0 0 22px;padding:15px;border:1px solid #d6e7e1;border-radius:10px;background:#f8fbfa}
+.rule-picker legend{padding:0 6px;color:#294c50;font-size:.875rem;font-weight:800}
+.rule-picker>p,.legacy-rule>p{margin:0 0 14px;font-size:.8125rem;line-height:1.7;color:#526b6f}
+.rule-picker .field>span,.rule-picker .field input,.rule-picker .field select{font-size:.875rem}
+.rule-picker .field select{min-width:0;text-overflow:ellipsis}
+.rule-picker .field input[aria-invalid="true"]{border-color:#b4423d}
+.rule-error,.rule-picker>.rule-error{padding:10px;margin:0 0 14px;border-radius:7px;background:#fff0ed;color:#a02f29;font-size:.8125rem;line-height:1.7;overflow-wrap:anywhere}
+.rule-details{padding:13px;border:1px solid #d6e7e1;border-radius:8px;background:white;overflow-wrap:anywhere}
+.rule-details>strong{display:block;font-size:.875rem;line-height:1.7;color:#244b43}
+.rule-details dl{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin:14px 0}
+.rule-details dt{font-size:.75rem;color:#62787c}
+.rule-details dd{margin:4px 0 0;font-size:.875rem;color:#294c50}
+.rule-details>p{margin:0;font-size:.75rem;line-height:1.7;color:#62787c}
+.legacy-rule{margin:0 0 18px}
+.kind-守規{background:#e6f6ef;color:#176b60}.kind-勤學{background:#edf2fb;color:#405f8c}.kind-勤到{background:#f1edfa;color:#6b5192}
+@media(max-width:360px){.rule-details dl{grid-template-columns:1fr}.rule-picker{padding:10px}}
 @media(max-width:360px){.school-score-grid{grid-template-columns:1fr}.school-score-grid>div{display:flex;align-items:center;justify-content:space-between;padding:10px 14px}.school-score-grid dd{margin:0}}

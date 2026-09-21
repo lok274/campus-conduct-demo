@@ -1,0 +1,1712 @@
+[
+  {
+    "code": "HW",
+    "category": "勤學",
+    "subCategory": "欠交功課",
+    "itemName": "欠交功課",
+    "score": -1,
+    "minScore": -1,
+    "maxScore": -1
+  },
+  {
+    "code": "1",
+    "category": "勤學",
+    "subCategory": "欠交功課",
+    "itemName": "欠交功課",
+    "score": -1,
+    "minScore": -4,
+    "maxScore": -1
+  },
+  {
+    "code": "3",
+    "category": "勤學",
+    "subCategory": "欠交功課",
+    "itemName": "給了期限後仍未呈交",
+    "score": -1,
+    "minScore": -4,
+    "maxScore": -1
+  },
+  {
+    "code": "5",
+    "category": "勤學",
+    "subCategory": "欠交功課",
+    "itemName": "呈交空白/近乎空白習作",
+    "score": -1,
+    "minScore": -4,
+    "maxScore": -1
+  },
+  {
+    "code": "9",
+    "category": "勤學",
+    "subCategory": "欠交功課",
+    "itemName": "扣勤學分",
+    "score": -1,
+    "minScore": -30,
+    "maxScore": -1
+  },
+  {
+    "code": "2",
+    "category": "勤學",
+    "subCategory": "欠交功課",
+    "itemName": "呈交未完成習作",
+    "score": -1,
+    "minScore": -4,
+    "maxScore": -1
+  },
+  {
+    "code": "4",
+    "category": "勤學",
+    "subCategory": "欠交功課",
+    "itemName": "多次欠帶書本/用具",
+    "score": -1,
+    "minScore": -4,
+    "maxScore": -1
+  },
+  {
+    "code": "303",
+    "category": "守規",
+    "subCategory": "校服儀容違規",
+    "itemName": "校服儀容不合標準(屢犯)",
+    "score": -3,
+    "minScore": -5,
+    "maxScore": -3
+  },
+  {
+    "code": "305",
+    "category": "守規",
+    "subCategory": "校服儀容違規",
+    "itemName": "服式儀容不合標準(便服日/活動)",
+    "score": -1,
+    "minScore": -6,
+    "maxScore": -1
+  },
+  {
+    "code": "302",
+    "category": "守規",
+    "subCategory": "校服儀容違規",
+    "itemName": "校服儀容不合標準(重犯)",
+    "score": -2,
+    "minScore": -2,
+    "maxScore": -2
+  },
+  {
+    "code": "304",
+    "category": "守規",
+    "subCategory": "校服儀容違規",
+    "itemName": "嚴重違反校服儀容規則",
+    "score": -3,
+    "minScore": -8,
+    "maxScore": -3
+  },
+  {
+    "code": "101",
+    "category": "守規",
+    "subCategory": "學習/課堂違規",
+    "itemName": "抄襲功課或協助抄襲功課",
+    "score": -1,
+    "minScore": -3,
+    "maxScore": -1
+  },
+  {
+    "code": "252",
+    "category": "守規",
+    "subCategory": "學習/課堂違規",
+    "itemName": "上課時弈棋",
+    "score": -4,
+    "minScore": -10,
+    "maxScore": -4
+  },
+  {
+    "code": "931",
+    "category": "守規",
+    "subCategory": "學習/課堂違規",
+    "itemName": "網課期間欠交功課，屢勸不改",
+    "score": -1,
+    "minScore": -5,
+    "maxScore": -1
+  },
+  {
+    "code": "210",
+    "category": "守規",
+    "subCategory": "學習/課堂違規",
+    "itemName": "上課時聽耳筒機",
+    "score": -3,
+    "minScore": -3,
+    "maxScore": -3
+  },
+  {
+    "code": "203",
+    "category": "守規",
+    "subCategory": "學習/課堂違規",
+    "itemName": "未能準時回課室而欠合理解釋",
+    "score": -1,
+    "minScore": -2,
+    "maxScore": -1
+  },
+  {
+    "code": "254",
+    "category": "守規",
+    "subCategory": "學習/課堂違規",
+    "itemName": "上課或轉堂期間使用手提電話",
+    "score": -5,
+    "minScore": -10,
+    "maxScore": -5
+  },
+  {
+    "code": "213",
+    "category": "守規",
+    "subCategory": "學習/課堂違規",
+    "itemName": "擅離座位",
+    "score": -1,
+    "minScore": -2,
+    "maxScore": -1
+  },
+  {
+    "code": "205",
+    "category": "守規",
+    "subCategory": "學習/課堂違規",
+    "itemName": "放學後把課本、雜物留在課室",
+    "score": -1,
+    "minScore": -1,
+    "maxScore": -1
+  },
+  {
+    "code": "256",
+    "category": "守規",
+    "subCategory": "學習/課堂違規",
+    "itemName": "轉堂/小息時閱讀八卦週刊",
+    "score": -2,
+    "minScore": -5,
+    "maxScore": -2
+  },
+  {
+    "code": "215",
+    "category": "守規",
+    "subCategory": "學習/課堂違規",
+    "itemName": "騷擾課堂秩序",
+    "score": -1,
+    "minScore": -3,
+    "maxScore": -1
+  },
+  {
+    "code": "207",
+    "category": "守規",
+    "subCategory": "學習/課堂違規",
+    "itemName": "拋擲紙團、垃圾",
+    "score": -1,
+    "minScore": -2,
+    "maxScore": -1
+  },
+  {
+    "code": "920",
+    "category": "守規",
+    "subCategory": "學習/課堂違規",
+    "itemName": "轉堂/小息時玩遊戲機",
+    "score": -2,
+    "minScore": -10,
+    "maxScore": -2
+  },
+  {
+    "code": "217",
+    "category": "守規",
+    "subCategory": "學習/課堂違規",
+    "itemName": "上課時喧叫",
+    "score": -3,
+    "minScore": -3,
+    "maxScore": -3
+  },
+  {
+    "code": "209",
+    "category": "守規",
+    "subCategory": "學習/課堂違規",
+    "itemName": "上課時吃喝東西",
+    "score": -1,
+    "minScore": -3,
+    "maxScore": -1
+  },
+  {
+    "code": "134",
+    "category": "守規",
+    "subCategory": "學習/課堂違規",
+    "itemName": "違反補習班規則",
+    "score": 0,
+    "minScore": 0,
+    "maxScore": 0
+  },
+  {
+    "code": "253",
+    "category": "守規",
+    "subCategory": "學習/課堂違規",
+    "itemName": "公然在上課時飲食",
+    "score": -4,
+    "minScore": -10,
+    "maxScore": -4
+  },
+  {
+    "code": "211",
+    "category": "守規",
+    "subCategory": "學習/課堂違規",
+    "itemName": "上課時看漫畫/雜誌/小說",
+    "score": -3,
+    "minScore": -3,
+    "maxScore": -3
+  },
+  {
+    "code": "204",
+    "category": "守規",
+    "subCategory": "學習/課堂違規",
+    "itemName": "不守課室/特別室規則",
+    "score": -1,
+    "minScore": -3,
+    "maxScore": -1
+  },
+  {
+    "code": "255",
+    "category": "守規",
+    "subCategory": "學習/課堂違規",
+    "itemName": "未經許可在校內使用手提電話",
+    "score": -5,
+    "minScore": -10,
+    "maxScore": -5
+  },
+  {
+    "code": "214",
+    "category": "守規",
+    "subCategory": "學習/課堂違規",
+    "itemName": "上課時不斷談話",
+    "score": -1,
+    "minScore": -3,
+    "maxScore": -1
+  },
+  {
+    "code": "206",
+    "category": "守規",
+    "subCategory": "學習/課堂違規",
+    "itemName": "拋擲粉筆、粉刷",
+    "score": -1,
+    "minScore": -2,
+    "maxScore": -1
+  },
+  {
+    "code": "916",
+    "category": "守規",
+    "subCategory": "學習/課堂違規",
+    "itemName": "上課時玩遊戲機",
+    "score": -4,
+    "minScore": -10,
+    "maxScore": -4
+  },
+  {
+    "code": "216",
+    "category": "守規",
+    "subCategory": "學習/課堂違規",
+    "itemName": "上課時傳紙",
+    "score": -1,
+    "minScore": -1,
+    "maxScore": -1
+  },
+  {
+    "code": "208",
+    "category": "守規",
+    "subCategory": "學習/課堂違規",
+    "itemName": "射橡根圈",
+    "score": -1,
+    "minScore": -2,
+    "maxScore": -1
+  },
+  {
+    "code": "930",
+    "category": "守規",
+    "subCategory": "學習/課堂違規",
+    "itemName": "不守實時課規則",
+    "score": -1,
+    "minScore": -3,
+    "maxScore": -1
+  },
+  {
+    "code": "202",
+    "category": "守規",
+    "subCategory": "轉堂/集會違規",
+    "itemName": "擅自調位",
+    "score": -1,
+    "minScore": -1,
+    "maxScore": -1
+  },
+  {
+    "code": "105",
+    "category": "守規",
+    "subCategory": "轉堂/集會違規",
+    "itemName": "在課室，更衣室，走廊或樓梯追逐嬉戲",
+    "score": -1,
+    "minScore": -2,
+    "maxScore": -1
+  },
+  {
+    "code": "124",
+    "category": "守規",
+    "subCategory": "轉堂/集會違規",
+    "itemName": "集會時不守秩序",
+    "score": -1,
+    "minScore": -4,
+    "maxScore": -1
+  },
+  {
+    "code": "126",
+    "category": "守規",
+    "subCategory": "轉堂/集會違規",
+    "itemName": "在課室或走廊作球類活動",
+    "score": -1,
+    "minScore": -3,
+    "maxScore": -1
+  },
+  {
+    "code": "201",
+    "category": "守規",
+    "subCategory": "轉堂/集會違規",
+    "itemName": "擅離課室",
+    "score": -1,
+    "minScore": -5,
+    "maxScore": -1
+  },
+  {
+    "code": "102",
+    "category": "守規",
+    "subCategory": "轉堂/集會違規",
+    "itemName": "擅入別班課室",
+    "score": -2,
+    "minScore": -2,
+    "maxScore": -2
+  },
+  {
+    "code": "123",
+    "category": "守規",
+    "subCategory": "轉堂/集會違規",
+    "itemName": "列隊時不守秩序",
+    "score": -1,
+    "minScore": -4,
+    "maxScore": -1
+  },
+  {
+    "code": "125",
+    "category": "守規",
+    "subCategory": "轉堂/集會違規",
+    "itemName": "轉堂時不守秩序",
+    "score": -1,
+    "minScore": -4,
+    "maxScore": -1
+  },
+  {
+    "code": "127",
+    "category": "守規",
+    "subCategory": "轉堂/集會違規",
+    "itemName": "擅闖課室",
+    "score": -1,
+    "minScore": -2,
+    "maxScore": -1
+  },
+  {
+    "code": "922",
+    "category": "守規",
+    "subCategory": "缺席行為",
+    "itemName": "多次嚴重遲到",
+    "score": -3,
+    "minScore": -8,
+    "maxScore": -3
+  },
+  {
+    "code": "184",
+    "category": "守規",
+    "subCategory": "缺席行為",
+    "itemName": "上課時擅離學校",
+    "score": -10,
+    "minScore": -20,
+    "maxScore": -10
+  },
+  {
+    "code": "926",
+    "category": "守規",
+    "subCategory": "缺席行為",
+    "itemName": "缺席學校活動而欠合理解釋",
+    "score": -3,
+    "minScore": -8,
+    "maxScore": -3
+  },
+  {
+    "code": "111",
+    "category": "守規",
+    "subCategory": "缺席行為",
+    "itemName": "留堂/補課缺席",
+    "score": -3,
+    "minScore": -3,
+    "maxScore": -3
+  },
+  {
+    "code": "200",
+    "category": "守規",
+    "subCategory": "缺席行為",
+    "itemName": "在課外活動進行期間，擅離校舍",
+    "score": -5,
+    "minScore": -15,
+    "maxScore": -5
+  },
+  {
+    "code": "132",
+    "category": "守規",
+    "subCategory": "缺席行為",
+    "itemName": "留堂/補課缺席(重犯)",
+    "score": -4,
+    "minScore": -4,
+    "maxScore": -4
+  },
+  {
+    "code": "905",
+    "category": "守規",
+    "subCategory": "缺席行為",
+    "itemName": "缺席課外活動而欠合理解釋",
+    "score": -3,
+    "minScore": -8,
+    "maxScore": -3
+  },
+  {
+    "code": "156",
+    "category": "守規",
+    "subCategory": "缺席行為",
+    "itemName": "曠課",
+    "score": -4,
+    "minScore": -20,
+    "maxScore": -4
+  },
+  {
+    "code": "914",
+    "category": "守規",
+    "subCategory": "缺席行為",
+    "itemName": "無合理原因缺席",
+    "score": -3,
+    "minScore": -15,
+    "maxScore": -3
+  },
+  {
+    "code": "183",
+    "category": "守規",
+    "subCategory": "缺席行為",
+    "itemName": "曠課(屢犯)",
+    "score": -20,
+    "minScore": -20,
+    "maxScore": -20
+  },
+  {
+    "code": "924",
+    "category": "守規",
+    "subCategory": "缺席行為",
+    "itemName": "遲到次數嚴重，屢勸不改",
+    "score": -3,
+    "minScore": -8,
+    "maxScore": -3
+  },
+  {
+    "code": "109",
+    "category": "守規",
+    "subCategory": "缺席行為",
+    "itemName": "傳召不見",
+    "score": -1,
+    "minScore": -3,
+    "maxScore": -1
+  },
+  {
+    "code": "187",
+    "category": "守規",
+    "subCategory": "缺席行為",
+    "itemName": "留校午膳期間，擅離學校",
+    "score": -5,
+    "minScore": -10,
+    "maxScore": -5
+  },
+  {
+    "code": "932",
+    "category": "守規",
+    "subCategory": "缺席行為",
+    "itemName": "嚴重遲到無合理解釋",
+    "score": -3,
+    "minScore": -10,
+    "maxScore": -3
+  },
+  {
+    "code": "113",
+    "category": "守規",
+    "subCategory": "缺席行為",
+    "itemName": "留堂/補課遲到",
+    "score": -1,
+    "minScore": -2,
+    "maxScore": -1
+  },
+  {
+    "code": "218",
+    "category": "守規",
+    "subCategory": "缺席行為",
+    "itemName": "遲到集隊而欠合理解釋",
+    "score": -3,
+    "minScore": -5,
+    "maxScore": -3
+  },
+  {
+    "code": "133",
+    "category": "守規",
+    "subCategory": "缺席行為",
+    "itemName": "留堂/補課缺席(屢犯)",
+    "score": -5,
+    "minScore": -5,
+    "maxScore": -5
+  },
+  {
+    "code": "906",
+    "category": "守規",
+    "subCategory": "缺席行為",
+    "itemName": "於考試期間，擅離校舍",
+    "score": -4,
+    "minScore": -9,
+    "maxScore": -4
+  },
+  {
+    "code": "182",
+    "category": "守規",
+    "subCategory": "缺席行為",
+    "itemName": "曠課(重犯)",
+    "score": -15,
+    "minScore": -15,
+    "maxScore": -15
+  },
+  {
+    "code": "910",
+    "category": "守規",
+    "subCategory": "無禮行為",
+    "itemName": "對老師粗暴無禮",
+    "score": -10,
+    "minScore": -40,
+    "maxScore": -10
+  },
+  {
+    "code": "912",
+    "category": "守規",
+    "subCategory": "無禮行為",
+    "itemName": "聯同街外人威嚇同學",
+    "score": -10,
+    "minScore": -40,
+    "maxScore": -10
+  },
+  {
+    "code": "174",
+    "category": "守規",
+    "subCategory": "無禮行為",
+    "itemName": "對學校職工不禮貌",
+    "score": -3,
+    "minScore": -40,
+    "maxScore": -3
+  },
+  {
+    "code": "190",
+    "category": "守規",
+    "subCategory": "無禮行為",
+    "itemName": "向老師挑釁",
+    "score": -9,
+    "minScore": -40,
+    "maxScore": -9
+  },
+  {
+    "code": "195",
+    "category": "守規",
+    "subCategory": "無禮行為",
+    "itemName": "拒絕考試",
+    "score": -15,
+    "minScore": -24,
+    "maxScore": -15
+  },
+  {
+    "code": "911",
+    "category": "守規",
+    "subCategory": "無禮行為",
+    "itemName": "提供假証供，包庇校外人士進入",
+    "score": -10,
+    "minScore": -40,
+    "maxScore": -10
+  },
+  {
+    "code": "173",
+    "category": "守規",
+    "subCategory": "無禮行為",
+    "itemName": "對師長不禮貌",
+    "score": -3,
+    "minScore": -40,
+    "maxScore": -3
+  },
+  {
+    "code": "175",
+    "category": "守規",
+    "subCategory": "無禮行為",
+    "itemName": "對領袖生/同學不禮貌",
+    "score": -1,
+    "minScore": -40,
+    "maxScore": -1
+  },
+  {
+    "code": "193",
+    "category": "守規",
+    "subCategory": "無禮行為",
+    "itemName": "蓄意蔑視學校紀律",
+    "score": -4,
+    "minScore": -40,
+    "maxScore": -4
+  },
+  {
+    "code": "913",
+    "category": "守規",
+    "subCategory": "欺侮行為",
+    "itemName": "辱罵同學",
+    "score": -3,
+    "minScore": -15,
+    "maxScore": -3
+  },
+  {
+    "code": "128",
+    "category": "守規",
+    "subCategory": "欺侮行為",
+    "itemName": "擅取同學物品",
+    "score": -2,
+    "minScore": -5,
+    "maxScore": -2
+  },
+  {
+    "code": "907",
+    "category": "守規",
+    "subCategory": "欺侮行為",
+    "itemName": "欺凌同學",
+    "score": -5,
+    "minScore": -40,
+    "maxScore": -5
+  },
+  {
+    "code": "923",
+    "category": "守規",
+    "subCategory": "欺侮行為",
+    "itemName": "發放虛假資訊，損害同學/老師聲譽",
+    "score": -4,
+    "minScore": -15,
+    "maxScore": -4
+  },
+  {
+    "code": "108",
+    "category": "守規",
+    "subCategory": "欺侮行為",
+    "itemName": "作弄同學",
+    "score": -1,
+    "minScore": -2,
+    "maxScore": -1
+  },
+  {
+    "code": "151",
+    "category": "守規",
+    "subCategory": "欺侮行為",
+    "itemName": "欺侮同學",
+    "score": -3,
+    "minScore": -10,
+    "maxScore": -3
+  },
+  {
+    "code": "117",
+    "category": "守規",
+    "subCategory": "作弊行為",
+    "itemName": "默書作弊",
+    "score": -3,
+    "minScore": -6,
+    "maxScore": -3
+  },
+  {
+    "code": "177",
+    "category": "守規",
+    "subCategory": "作弊行為",
+    "itemName": "考試/統測作弊",
+    "score": -10,
+    "minScore": -24,
+    "maxScore": -10
+  },
+  {
+    "code": "176",
+    "category": "守規",
+    "subCategory": "作弊行為",
+    "itemName": "小測作弊",
+    "score": -3,
+    "minScore": -6,
+    "maxScore": -3
+  },
+  {
+    "code": "194",
+    "category": "守規",
+    "subCategory": "作弊行為",
+    "itemName": "評估/補測作弊",
+    "score": -5,
+    "minScore": -8,
+    "maxScore": -5
+  },
+  {
+    "code": "185",
+    "category": "守規",
+    "subCategory": "誠信問題",
+    "itemName": "偽造家長/學校通訊",
+    "score": -10,
+    "minScore": -24,
+    "maxScore": -10
+  },
+  {
+    "code": "153",
+    "category": "守規",
+    "subCategory": "誠信問題",
+    "itemName": "冒簽家長簽署",
+    "score": -3,
+    "minScore": -10,
+    "maxScore": -3
+  },
+  {
+    "code": "155",
+    "category": "守規",
+    "subCategory": "誠信問題",
+    "itemName": "塗改校方文件",
+    "score": -3,
+    "minScore": -10,
+    "maxScore": -3
+  },
+  {
+    "code": "928",
+    "category": "守規",
+    "subCategory": "誠信問題",
+    "itemName": "蓄意不交手提電話予學校保管",
+    "score": -3,
+    "minScore": -5,
+    "maxScore": -3
+  },
+  {
+    "code": "154",
+    "category": "守規",
+    "subCategory": "誠信問題",
+    "itemName": "冒簽學生手冊",
+    "score": -3,
+    "minScore": -10,
+    "maxScore": -3
+  },
+  {
+    "code": "161",
+    "category": "守規",
+    "subCategory": "不良行為",
+    "itemName": "唱淫褻性歌曲",
+    "score": -3,
+    "minScore": -10,
+    "maxScore": -3
+  },
+  {
+    "code": "251",
+    "category": "守規",
+    "subCategory": "不良行為",
+    "itemName": "未經准許在校內玩紙牌/紙牌遊戲",
+    "score": -2,
+    "minScore": -10,
+    "maxScore": -2
+  },
+  {
+    "code": "186",
+    "category": "守規",
+    "subCategory": "不良行為",
+    "itemName": "行為魯莽，不顧他人安全",
+    "score": -3,
+    "minScore": -15,
+    "maxScore": -3
+  },
+  {
+    "code": "165",
+    "category": "守規",
+    "subCategory": "不良行為",
+    "itemName": "吸煙",
+    "score": -10,
+    "minScore": -10,
+    "maxScore": -10
+  },
+  {
+    "code": "908",
+    "category": "守規",
+    "subCategory": "不良行為",
+    "itemName": "惡意作弄老師",
+    "score": -4,
+    "minScore": -40,
+    "maxScore": -4
+  },
+  {
+    "code": "107",
+    "category": "守規",
+    "subCategory": "不良行為",
+    "itemName": "拾遺不報",
+    "score": -1,
+    "minScore": -2,
+    "maxScore": -1
+  },
+  {
+    "code": "189",
+    "category": "守規",
+    "subCategory": "不良行為",
+    "itemName": "向老師提供假証供",
+    "score": -3,
+    "minScore": -10,
+    "maxScore": -3
+  },
+  {
+    "code": "169",
+    "category": "守規",
+    "subCategory": "不良行為",
+    "itemName": "校內行為不檢",
+    "score": -3,
+    "minScore": -40,
+    "maxScore": -3
+  },
+  {
+    "code": "917",
+    "category": "守規",
+    "subCategory": "不良行為",
+    "itemName": "協助同學收藏違規物品",
+    "score": -3,
+    "minScore": -10,
+    "maxScore": -3
+  },
+  {
+    "code": "138",
+    "category": "守規",
+    "subCategory": "不良行為",
+    "itemName": "指使校外人士解決糾紛",
+    "score": -10,
+    "minScore": -40,
+    "maxScore": -10
+  },
+  {
+    "code": "196",
+    "category": "守規",
+    "subCategory": "不良行為",
+    "itemName": "無故缺席考試",
+    "score": -10,
+    "minScore": -15,
+    "maxScore": -10
+  },
+  {
+    "code": "179",
+    "category": "守規",
+    "subCategory": "不良行為",
+    "itemName": "藏有/閱讀不良刊物或物品或資訊",
+    "score": -3,
+    "minScore": -24,
+    "maxScore": -3
+  },
+  {
+    "code": "919",
+    "category": "守規",
+    "subCategory": "不良行為",
+    "itemName": "恐嚇師長",
+    "score": -25,
+    "minScore": -40,
+    "maxScore": -25
+  },
+  {
+    "code": "160",
+    "category": "守規",
+    "subCategory": "不良行為",
+    "itemName": "閱讀及繪寫猥褻圖畫或文字",
+    "score": -3,
+    "minScore": -10,
+    "maxScore": -3
+  },
+  {
+    "code": "198",
+    "category": "守規",
+    "subCategory": "不良行為",
+    "itemName": "網上發放/傳遞不良訊息",
+    "score": -4,
+    "minScore": -40,
+    "maxScore": -4
+  },
+  {
+    "code": "181",
+    "category": "守規",
+    "subCategory": "不良行為",
+    "itemName": "藏煙(重犯)",
+    "score": -15,
+    "minScore": -15,
+    "maxScore": -15
+  },
+  {
+    "code": "162",
+    "category": "守規",
+    "subCategory": "不良行為",
+    "itemName": "行為不誠實",
+    "score": -1,
+    "minScore": -20,
+    "maxScore": -1
+  },
+  {
+    "code": "904",
+    "category": "守規",
+    "subCategory": "不良行為",
+    "itemName": "校外行為不檢",
+    "score": -3,
+    "minScore": -60,
+    "maxScore": -3
+  },
+  {
+    "code": "188",
+    "category": "守規",
+    "subCategory": "不良行為",
+    "itemName": "教唆同學提供假証供",
+    "score": -3,
+    "minScore": -10,
+    "maxScore": -3
+  },
+  {
+    "code": "166",
+    "category": "守規",
+    "subCategory": "不良行為",
+    "itemName": "藏煙",
+    "score": -10,
+    "minScore": -10,
+    "maxScore": -10
+  },
+  {
+    "code": "915",
+    "category": "守規",
+    "subCategory": "不良行為",
+    "itemName": "以猥褻行為欺侮同學",
+    "score": -10,
+    "minScore": -40,
+    "maxScore": -10
+  },
+  {
+    "code": "110",
+    "category": "守規",
+    "subCategory": "不良行為",
+    "itemName": "說粗言俗語",
+    "score": -1,
+    "minScore": -3,
+    "maxScore": -1
+  },
+  {
+    "code": "192",
+    "category": "守規",
+    "subCategory": "不良行為",
+    "itemName": "惡意作弄同學",
+    "score": -4,
+    "minScore": -15,
+    "maxScore": -4
+  },
+  {
+    "code": "170",
+    "category": "守規",
+    "subCategory": "不良行為",
+    "itemName": "在公共場所行為不檢",
+    "score": -3,
+    "minScore": -40,
+    "maxScore": -3
+  },
+  {
+    "code": "918",
+    "category": "守規",
+    "subCategory": "不良行為",
+    "itemName": "指使他人買煙",
+    "score": -10,
+    "minScore": -15,
+    "maxScore": -10
+  },
+  {
+    "code": "152",
+    "category": "守規",
+    "subCategory": "不良行為",
+    "itemName": "說粗口",
+    "score": -4,
+    "minScore": -10,
+    "maxScore": -4
+  },
+  {
+    "code": "197",
+    "category": "守規",
+    "subCategory": "不良行為",
+    "itemName": "網上發放不良訊息 ，對老師無禮",
+    "score": -6,
+    "minScore": -40,
+    "maxScore": -6
+  },
+  {
+    "code": "180",
+    "category": "守規",
+    "subCategory": "不良行為",
+    "itemName": "吸煙(重犯)",
+    "score": -15,
+    "minScore": -15,
+    "maxScore": -15
+  },
+  {
+    "code": "925",
+    "category": "守規",
+    "subCategory": "不良行為",
+    "itemName": "校外行為不符學校要求",
+    "score": -3,
+    "minScore": -15,
+    "maxScore": -3
+  },
+  {
+    "code": "171",
+    "category": "守規",
+    "subCategory": "刑事行為",
+    "itemName": "恐嚇同學",
+    "score": -10,
+    "minScore": -40,
+    "maxScore": -10
+  },
+  {
+    "code": "157",
+    "category": "守規",
+    "subCategory": "刑事行為",
+    "itemName": "向同學強索金錢",
+    "score": -10,
+    "minScore": -40,
+    "maxScore": -10
+  },
+  {
+    "code": "178",
+    "category": "守規",
+    "subCategory": "刑事行為",
+    "itemName": "打架/互毆",
+    "score": -10,
+    "minScore": -40,
+    "maxScore": -10
+  },
+  {
+    "code": "159",
+    "category": "守規",
+    "subCategory": "刑事行為",
+    "itemName": "蓄意破壞公物",
+    "score": -3,
+    "minScore": -40,
+    "maxScore": -3
+  },
+  {
+    "code": "909",
+    "category": "守規",
+    "subCategory": "刑事行為",
+    "itemName": "傷害他人身體",
+    "score": -10,
+    "minScore": -40,
+    "maxScore": -10
+  },
+  {
+    "code": "164",
+    "category": "守規",
+    "subCategory": "刑事行為",
+    "itemName": "接贓",
+    "score": -4,
+    "minScore": -40,
+    "maxScore": -4
+  },
+  {
+    "code": "168",
+    "category": "守規",
+    "subCategory": "刑事行為",
+    "itemName": "賭博",
+    "score": -10,
+    "minScore": -24,
+    "maxScore": -10
+  },
+  {
+    "code": "139",
+    "category": "守規",
+    "subCategory": "刑事行為",
+    "itemName": "藏有危險物品",
+    "score": -5,
+    "minScore": -40,
+    "maxScore": -5
+  },
+  {
+    "code": "172",
+    "category": "守規",
+    "subCategory": "刑事行為",
+    "itemName": "毆打同學",
+    "score": -10,
+    "minScore": -40,
+    "maxScore": -10
+  },
+  {
+    "code": "158",
+    "category": "守規",
+    "subCategory": "刑事行為",
+    "itemName": "惡意破壞同學物件",
+    "score": -1,
+    "minScore": -6,
+    "maxScore": -1
+  },
+  {
+    "code": "191",
+    "category": "守規",
+    "subCategory": "刑事行為",
+    "itemName": "插贓嫁禍",
+    "score": -10,
+    "minScore": -40,
+    "maxScore": -10
+  },
+  {
+    "code": "163",
+    "category": "守規",
+    "subCategory": "刑事行為",
+    "itemName": "竊取他人物品",
+    "score": -4,
+    "minScore": -40,
+    "maxScore": -4
+  },
+  {
+    "code": "167",
+    "category": "守規",
+    "subCategory": "刑事行為",
+    "itemName": "玩火",
+    "score": -10,
+    "minScore": -40,
+    "maxScore": -10
+  },
+  {
+    "code": "122",
+    "category": "守規",
+    "subCategory": "其他",
+    "itemName": "未經許可在操場踢球",
+    "score": -1,
+    "minScore": -3,
+    "maxScore": -1
+  },
+  {
+    "code": "114",
+    "category": "守規",
+    "subCategory": "其他",
+    "itemName": "塗污公物",
+    "score": -1,
+    "minScore": -6,
+    "maxScore": -1
+  },
+  {
+    "code": "212",
+    "category": "守規",
+    "subCategory": "其他",
+    "itemName": "攜帶與課程無關之物品回校",
+    "score": -1,
+    "minScore": -8,
+    "maxScore": -1
+  },
+  {
+    "code": "130",
+    "category": "守規",
+    "subCategory": "其他",
+    "itemName": "擅攜食物上課室而欠合理解釋",
+    "score": -1,
+    "minScore": -3,
+    "maxScore": -1
+  },
+  {
+    "code": "116",
+    "category": "守規",
+    "subCategory": "其他",
+    "itemName": "違反考試規則",
+    "score": -1,
+    "minScore": -15,
+    "maxScore": -1
+  },
+  {
+    "code": "902",
+    "category": "守規",
+    "subCategory": "其他",
+    "itemName": "破壞公物",
+    "score": -1,
+    "minScore": -9,
+    "maxScore": -1
+  },
+  {
+    "code": "135",
+    "category": "守規",
+    "subCategory": "其他",
+    "itemName": "逾期歸還欠書",
+    "score": -1,
+    "minScore": -2,
+    "maxScore": -1
+  },
+  {
+    "code": "119",
+    "category": "守規",
+    "subCategory": "其他",
+    "itemName": "逃避留校午膳",
+    "score": -2,
+    "minScore": -2,
+    "maxScore": -2
+  },
+  {
+    "code": "921",
+    "category": "守規",
+    "subCategory": "其他",
+    "itemName": "欠帶學生證(三次)",
+    "score": -1,
+    "minScore": -1,
+    "maxScore": -1
+  },
+  {
+    "code": "104",
+    "category": "守規",
+    "subCategory": "其他",
+    "itemName": "屢次欠帶手冊",
+    "score": -2,
+    "minScore": -2,
+    "maxScore": -2
+  },
+  {
+    "code": "137",
+    "category": "守規",
+    "subCategory": "其他",
+    "itemName": "逾期歸還欠書(屢犯)",
+    "score": -5,
+    "minScore": -6,
+    "maxScore": -5
+  },
+  {
+    "code": "121",
+    "category": "守規",
+    "subCategory": "其他",
+    "itemName": "隨意棄置垃圾",
+    "score": -1,
+    "minScore": -2,
+    "maxScore": -1
+  },
+  {
+    "code": "929",
+    "category": "守規",
+    "subCategory": "其他",
+    "itemName": "參與課外活動時違反活動規則",
+    "score": -1,
+    "minScore": -3,
+    "maxScore": -1
+  },
+  {
+    "code": "112",
+    "category": "守規",
+    "subCategory": "其他",
+    "itemName": "不依手續請假",
+    "score": -1,
+    "minScore": -8,
+    "maxScore": -1
+  },
+  {
+    "code": "199",
+    "category": "守規",
+    "subCategory": "其他",
+    "itemName": "非法佔用貯物櫃",
+    "score": -2,
+    "minScore": -5,
+    "maxScore": -2
+  },
+  {
+    "code": "129",
+    "category": "守規",
+    "subCategory": "其他",
+    "itemName": "塗污手冊/校方文件",
+    "score": -1,
+    "minScore": -3,
+    "maxScore": -1
+  },
+  {
+    "code": "115",
+    "category": "守規",
+    "subCategory": "其他",
+    "itemName": "違反測驗規則",
+    "score": -1,
+    "minScore": -6,
+    "maxScore": -1
+  },
+  {
+    "code": "901",
+    "category": "守規",
+    "subCategory": "其他",
+    "itemName": "擅用教職員/傷殘人士洗手間",
+    "score": -1,
+    "minScore": -3,
+    "maxScore": -1
+  },
+  {
+    "code": "131",
+    "category": "守規",
+    "subCategory": "其他",
+    "itemName": "多次不服從老師指示",
+    "score": -1,
+    "minScore": -5,
+    "maxScore": -1
+  },
+  {
+    "code": "118",
+    "category": "守規",
+    "subCategory": "其他",
+    "itemName": "邀約外人在學校門外等候接送",
+    "score": -3,
+    "minScore": -3,
+    "maxScore": -3
+  },
+  {
+    "code": "903",
+    "category": "守規",
+    "subCategory": "其他",
+    "itemName": "未辦合法借書手續，擅自取去圖書",
+    "score": -5,
+    "minScore": -15,
+    "maxScore": -5
+  },
+  {
+    "code": "103",
+    "category": "守規",
+    "subCategory": "其他",
+    "itemName": "欠帶手冊",
+    "score": -1,
+    "minScore": -2,
+    "maxScore": -1
+  },
+  {
+    "code": "136",
+    "category": "守規",
+    "subCategory": "其他",
+    "itemName": "逾期歸還欠書(重犯)",
+    "score": -3,
+    "minScore": -4,
+    "maxScore": -3
+  },
+  {
+    "code": "120",
+    "category": "守規",
+    "subCategory": "其他",
+    "itemName": "不在指定地點午膳",
+    "score": -2,
+    "minScore": -2,
+    "maxScore": -2
+  },
+  {
+    "code": "927",
+    "category": "守規",
+    "subCategory": "其他",
+    "itemName": "不守留校午膳規則",
+    "score": -1,
+    "minScore": -5,
+    "maxScore": -1
+  },
+  {
+    "code": "106",
+    "category": "守規",
+    "subCategory": "其他",
+    "itemName": "在准許範圍外飲食",
+    "score": -1,
+    "minScore": -3,
+    "maxScore": -1
+  },
+  {
+    "code": "140",
+    "category": "守規",
+    "subCategory": "其他",
+    "itemName": "未得許可，擅自乘搭升降機",
+    "score": -1,
+    "minScore": -3,
+    "maxScore": -1
+  },
+  {
+    "code": "1",
+    "category": "勤到",
+    "subCategory": "勤到分類",
+    "itemName": "遲到",
+    "score": -3,
+    "minScore": -3,
+    "maxScore": -3
+  },
+  {
+    "code": "3",
+    "category": "勤到",
+    "subCategory": "勤到分類",
+    "itemName": "早退",
+    "score": -0.5,
+    "minScore": -0.5,
+    "maxScore": -0.5
+  },
+  {
+    "code": "2",
+    "category": "勤到",
+    "subCategory": "勤到分類",
+    "itemName": "缺席",
+    "score": -0.5,
+    "minScore": -0.5,
+    "maxScore": -0.5
+  },
+  {
+    "code": "533",
+    "category": "守規",
+    "subCategory": "定期獎勵類別",
+    "itemName": "表現良好，突出之學長(輔導組)",
+    "score": 1,
+    "minScore": 1,
+    "maxScore": 8
+  },
+  {
+    "code": "530",
+    "category": "守規",
+    "subCategory": "定期獎勵類別",
+    "itemName": "輔導組無煙道小組計劃",
+    "score": 1,
+    "minScore": 1,
+    "maxScore": 5
+  },
+  {
+    "code": "529",
+    "category": "守規",
+    "subCategory": "定期獎勵類別",
+    "itemName": "輔導組清新一代計劃",
+    "score": 1,
+    "minScore": 1,
+    "maxScore": 5
+  },
+  {
+    "code": "528",
+    "category": "守規",
+    "subCategory": "定期獎勵類別",
+    "itemName": "長期為班服務",
+    "score": 1,
+    "minScore": 1,
+    "maxScore": 5
+  },
+  {
+    "code": "521",
+    "category": "守規",
+    "subCategory": "定期獎勵類別",
+    "itemName": "拉闊新人類獎勵計畫",
+    "score": 1,
+    "minScore": 1,
+    "maxScore": 6
+  },
+  {
+    "code": "520",
+    "category": "守規",
+    "subCategory": "定期獎勵類別",
+    "itemName": "隸屬學科的會社幹事",
+    "score": 1,
+    "minScore": 1,
+    "maxScore": 5
+  },
+  {
+    "code": "519",
+    "category": "守規",
+    "subCategory": "定期獎勵類別",
+    "itemName": "全學期守規者（沒有扣分）",
+    "score": 5,
+    "minScore": 5,
+    "maxScore": 5
+  },
+  {
+    "code": "516",
+    "category": "守規",
+    "subCategory": "定期獎勵類別",
+    "itemName": "表現良好、突出之學生會幹事",
+    "score": 1,
+    "minScore": 1,
+    "maxScore": 12
+  },
+  {
+    "code": "515",
+    "category": "守規",
+    "subCategory": "定期獎勵類別",
+    "itemName": "表現良好、突出之領袖生",
+    "score": 1,
+    "minScore": 1,
+    "maxScore": 14
+  },
+  {
+    "code": "514",
+    "category": "守規",
+    "subCategory": "定期獎勵類別",
+    "itemName": "協助同學改進學業或行為",
+    "score": 1,
+    "minScore": 1,
+    "maxScore": 8
+  },
+  {
+    "code": "513",
+    "category": "守規",
+    "subCategory": "定期獎勵類別",
+    "itemName": "圖書館服務生",
+    "score": 1,
+    "minScore": 1,
+    "maxScore": 10
+  },
+  {
+    "code": "512",
+    "category": "守規",
+    "subCategory": "定期獎勵類別",
+    "itemName": "隸屬課外活動組的會社幹事",
+    "score": 1,
+    "minScore": 1,
+    "maxScore": 7
+  },
+  {
+    "code": "511",
+    "category": "守規",
+    "subCategory": "定期獎勵類別",
+    "itemName": "協助學校行政組別工作",
+    "score": 1,
+    "minScore": 1,
+    "maxScore": 5
+  },
+  {
+    "code": "510",
+    "category": "守規",
+    "subCategory": "定期獎勵類別",
+    "itemName": "班長/膳長",
+    "score": 1,
+    "minScore": 1,
+    "maxScore": 7
+  },
+  {
+    "code": "508",
+    "category": "守規",
+    "subCategory": "定期獎勵類別",
+    "itemName": "班會幹事",
+    "score": 1,
+    "minScore": 1,
+    "maxScore": 5
+  },
+  {
+    "code": "532",
+    "category": "守規",
+    "subCategory": "經常獎勵類別",
+    "itemName": "協助籌辦全港性大型比賽或活動",
+    "score": 1,
+    "minScore": 1,
+    "maxScore": 6
+  },
+  {
+    "code": "531",
+    "category": "守規",
+    "subCategory": "經常獎勵類別",
+    "itemName": "參與校慶日服務 / 表演",
+    "score": 1,
+    "minScore": 1,
+    "maxScore": 6
+  },
+  {
+    "code": "527",
+    "category": "守規",
+    "subCategory": "經常獎勵類別",
+    "itemName": "代表學校參加表演等活動有良好表現(同類別如音樂、體育，每學期加分上限為10分)",
+    "score": 1,
+    "minScore": 1,
+    "maxScore": 2
+  },
+  {
+    "code": "526",
+    "category": "守規",
+    "subCategory": "經常獎勵類別",
+    "itemName": "對學校有貢獻(如代表學校參加公開比賽有優異表現—以類別計算)",
+    "score": 4,
+    "minScore": 4,
+    "maxScore": 10
+  },
+  {
+    "code": "525",
+    "category": "守規",
+    "subCategory": "經常獎勵類別",
+    "itemName": "協助籌辦全校性大型活動",
+    "score": 1,
+    "minScore": 1,
+    "maxScore": 4
+  },
+  {
+    "code": "518",
+    "category": "守規",
+    "subCategory": "經常獎勵類別",
+    "itemName": "助人自助計劃",
+    "score": 1,
+    "minScore": 1,
+    "maxScore": 10
+  },
+  {
+    "code": "517",
+    "category": "守規",
+    "subCategory": "經常獎勵類別",
+    "itemName": "自律自強計劃",
+    "score": 1,
+    "minScore": 1,
+    "maxScore": 10
+  },
+  {
+    "code": "509",
+    "category": "守規",
+    "subCategory": "經常獎勵類別",
+    "itemName": "為學科、大型活動服務",
+    "score": 1,
+    "minScore": 1,
+    "maxScore": 3
+  },
+  {
+    "code": "507",
+    "category": "守規",
+    "subCategory": "經常獎勵類別",
+    "itemName": "行為操守獲校外團體嘉許表揚，提高校譽者",
+    "score": 7,
+    "minScore": 7,
+    "maxScore": 40
+  },
+  {
+    "code": "506",
+    "category": "守規",
+    "subCategory": "經常獎勵類別",
+    "itemName": "見義勇為，檢舉嚴重罪行，查明屬實者（如集體作弊、偷竊、黑社會）",
+    "score": 7,
+    "minScore": 7,
+    "maxScore": 24
+  },
+  {
+    "code": "505",
+    "category": "守規",
+    "subCategory": "經常獎勵類別",
+    "itemName": "有敬老扶幼、捨己為人之表現者",
+    "score": 1,
+    "minScore": 1,
+    "maxScore": 10
+  },
+  {
+    "code": "504",
+    "category": "守規",
+    "subCategory": "經常獎勵類別",
+    "itemName": "代表學校參加公開比賽有良好表現",
+    "score": 1,
+    "minScore": 1,
+    "maxScore": 3
+  },
+  {
+    "code": "503",
+    "category": "守規",
+    "subCategory": "經常獎勵類別",
+    "itemName": "見義勇為，誠實舉報（如塗污、破壞公物、意圖作弊、帶違禁品 、偷竊）",
+    "score": 1,
+    "minScore": 1,
+    "maxScore": 5
+  },
+  {
+    "code": "502",
+    "category": "守規",
+    "subCategory": "經常獎勵類別",
+    "itemName": "積極參與公益（如法會、賣旗等），有良好表現者",
+    "score": 1,
+    "minScore": 1,
+    "maxScore": 2
+  },
+  {
+    "code": "501",
+    "category": "守規",
+    "subCategory": "經常獎勵類別",
+    "itemName": "拾遺不昧，價值貴重者",
+    "score": 1,
+    "minScore": 1,
+    "maxScore": 5
+  }
+]
