@@ -34,8 +34,15 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 .case-person h3{margin:0;font-size:17px}
 .case-person p{margin:4px 0 0;color:#879ca2;font-size:11px}
 .case-steps{display:grid;grid-template-columns:repeat(3,1fr);gap:7px;margin:20px 0 24px}
-.case-steps span{padding:10px 6px;border-radius:8px;background:#f0f4f4;color:#a1b0b4;text-align:center;font-size:10px;font-weight:800}
-.case-steps span.active{background:#e6f3f0;color:#20867c}
+.case-steps>span,.case-steps>button{display:flex;align-items:center;justify-content:center;gap:5px;padding:10px 6px;border:1px solid transparent;border-radius:8px;background:#f0f4f4;color:#62787c;text-align:center;font-size:.875rem;font-weight:800;line-height:1.5;min-width:0}
+.case-steps>.active{background:#e6f3f0;color:#20867c}
+.case-steps>button{border-color:#aed5cc}.case-steps>button:hover{background:#d7eee7}.case-steps>button svg{flex:none}
+.case-steps>.skipped{background:#f5f7f7;color:#647b82}
+.case-flow-hint,.case-edit-hint{font-size:.875rem;line-height:1.7;color:#526b6f}
+.case-flow-hint{margin:-12px 0 18px}.case-edit-hint{padding:12px;border-radius:8px;background:#eef7f4;margin:0 0 18px}
+.case-direct-close{margin-bottom:20px}.case-direct-close>form{padding:16px;border:1px solid #c5ddd5;border-radius:10px;background:#f3faf7}.case-direct-close strong{font-size:1rem}.case-direct-close p{font-size:.875rem;line-height:1.7;color:#526b6f}.case-direct-close .field>span,.case-direct-close textarea,.case-direct-close .btn{font-size:.875rem}
+.case-direct-actions,.entry-form-actions{display:flex;flex-wrap:wrap;gap:10px}.case-direct-actions{justify-content:flex-end}
+.entry-follow-field.batch-follow-field legend,.entry-follow-field .batch-follow-options strong{font-size:.875rem}.entry-follow-field .batch-follow-options small{font-size:.8125rem;line-height:1.6}
 .case-section{padding:19px 0;border-top:1px solid #e8eff0}
 .case-section-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px}
 .case-section-head h3{margin:0;color:#304a53;font-size:14px;font-weight:800}
@@ -59,7 +66,7 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 .case-follow-form{margin-top:18px}
 .case-closing .btn{margin-top:3px}
 .case-closing .case-description{margin:8px 0 12px}
-@media(max-width:620px){.case-panel{width:100%}.case-steps{gap:4px}.case-steps span{font-size:9px}.case-person{flex-wrap:wrap}.case-person .status-tag{margin-left:auto}.case-facts{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:620px){.case-panel{width:100%}.case-steps{gap:4px}.case-steps>button{flex-wrap:wrap}.case-person{flex-wrap:wrap}.case-person .status-tag{margin-left:auto}.case-facts{grid-template-columns:repeat(2,minmax(0,1fr))}}
 
 /* Student history across cases */
 .timeline-intro{margin:-5px 0 18px;color:#92a5aa;font-size:10px;line-height:1.6}

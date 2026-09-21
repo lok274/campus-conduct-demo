@@ -5,11 +5,12 @@ import { ArrowRight, ArrowUpDown, BookOpenCheck, CalendarDays, Check, CheckCircl
 import { SCHOOL_BASE_SCORES, SCHOOL_CATEGORIES, type SchoolCategory } from "../lib/school-rules";
 import { resolveRuleSelection, ruleRecordFields, ruleSearchText, type ConductRule, type RuleInput } from "../lib/conduct-rules";
 import { RuleDetails, RulePicker } from "../components/rule-picker";
+import { completeCase, DIRECT_CLOSURE_REASON, type CaseClosure, type CaseStatus } from "../lib/case-workflow";
 
 type Page = "dashboard" | "todos" | "students" | "records";
 type LegacyKind = "嘉許" | "提醒" | "違規";
 type Kind = LegacyKind | SchoolCategory;
-type Status = "待跟進" | "跟進中" | "已結案";
+type Status = CaseStatus;
 type TodoScope = "open" | "completed";
 type TodoFilter = "all" | "overdue" | "today" | "next7" | "unscheduled";
 type TodoSort = "priority" | "updated-desc" | "student-asc" | "class-asc";
@@ -18,7 +19,7 @@ type StudentSort = "class-asc" | "name-asc" | "records-desc" | "pending-desc" | 
 type RecordSort = "date-desc" | "date-asc" | "updated-desc" | "student-asc" | "status-priority";
 type Student = { id: string; name: string; className: string; seat: string; number: string };
 type FollowUp = { id: string; date: string; at?: string; author: string; note: string; type?: "follow-up" | "reopened" };
-type Closure = { id: string; date: string; at?: string; summary: string };
+type Closure = CaseClosure;
 type TimelineEvent = {
   id: string; caseId: string; date: string; at?: string; order: number;
   type: "record" | "follow-up" | "closed" | "reopened";
@@ -26,10 +27,10 @@ type TimelineEvent = {
 };
 type Entry = {
   id: string; studentId: string; kind: Kind; category: string; date: string; note: string; status: Status;
-  rule?: ConductRule; scoreChange?: number;
+  rule?: ConductRule; scoreChange?: number; closedWithoutFollowUp?: boolean;
   batchId?: string; assignee?: string; dueDate?: string; followUps?: FollowUp[]; resolution?: string; closedAt?: string; closureHistory?: Closure[];
 };
-type Draft = Pick<Entry, "studentId" | "kind" | "category" | "date" | "note" | "status"> & RuleInput;
+type Draft = Pick<Entry, "studentId" | "kind" | "category" | "date" | "note" | "status"> & RuleInput & { needsFollowUp: boolean };
 type BatchDraft = Pick<Entry, "kind" | "category" | "date" | "note"> & RuleInput & { needsFollowUp: boolean; assignee: string; dueDate: string };
 type BatchStep = "students" | "details" | "review";
 type GlobalSearchResult = {
@@ -72,7 +73,7 @@ const categories: Record<LegacyKind, string[]> = {
 const currentLocalDate = () => new Date().toLocaleDateString("sv-SE");
 const newDraft = (): Draft => ({
   studentId: students[0].id, kind: "嘉許", category: "服務精神",
-  date: currentLocalDate(), note: "", status: "待跟進", code: "", schoolCategory: "", subCategory: "",
+  date: currentLocalDate(), note: "", status: "待跟進", needsFollowUp: true, code: "", schoolCategory: "", subCategory: "",
 });
 const newBatchDraft = (): BatchDraft => ({
   kind: "嘉許", category: "服務精神", date: currentLocalDate(), note: "", needsFollowUp: false, assignee: "", dueDate: "", code: "", schoolCategory: "", subCategory: "",
@@ -163,6 +164,7 @@ export default function Home() {
   const [formOpen, setFormOpen] = useState(false);
   const [entryError, setEntryError] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [formReturnCaseId, setFormReturnCaseId] = useState<string | null>(null);
   const [draft, setDraft] = useState<Draft>(newDraft);
   const [batchFormOpen, setBatchFormOpen] = useState(false);
   const [batchStep, setBatchStep] = useState<BatchStep>("students");
@@ -207,14 +209,14 @@ export default function Home() {
             window.setTimeout(() => batchButtonRef.current?.focus(), 0);
           }
         }
-        else if (formOpen) setFormOpen(false);
+        else if (formOpen) { setFormOpen(false); if (formReturnCaseId) setCaseId(formReturnCaseId); setFormReturnCaseId(null); }
         else if (caseId) { setCaseId(null); setStudentId(caseReturnStudentId); setCaseReturnStudentId(null); }
         else setStudentId(null);
       }
     };
     window.addEventListener("keydown", close);
     return () => window.removeEventListener("keydown", close);
-  }, [formOpen, batchFormOpen, batchHasChanges, studentId, caseId, caseReturnStudentId]);
+  }, [formOpen, formReturnCaseId, batchFormOpen, batchHasChanges, studentId, caseId, caseReturnStudentId]);
   useEffect(() => {
     const openWithShortcut = (event: KeyboardEvent) => {
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
@@ -463,11 +465,12 @@ export default function Home() {
     }
   }
   function addEntry(id?: string) {
-    setEditingId(null); setDraft({ ...newDraft(), studentId: id || students[0].id });
+    setEditingId(null); setFormReturnCaseId(null); setDraft({ ...newDraft(), studentId: id || students[0].id });
     setEntryError("");
     setStudentId(null); setCaseId(null); setCaseReturnStudentId(null); setBatchFormOpen(false); setFormOpen(true);
   }
   function openBatchForm() {
+    setFormReturnCaseId(null);
     setBatchDraft(newBatchDraft()); setBatchStudentIds([]); setBatchClassFilter("全部班級"); setBatchSearch("");
     setBatchSkipDuplicates(true); setBatchError(""); setBatchStep("students");
     setStudentId(null); setCaseId(null); setCaseReturnStudentId(null); setFormOpen(false); setBatchFormOpen(true);
@@ -520,6 +523,7 @@ export default function Home() {
         assignee: batchDraft.assignee.trim() || undefined,
         dueDate: batchDraft.dueDate || undefined,
       } : {
+        closedWithoutFollowUp: true,
         resolution: closureSummary,
         closedAt: today,
         closureHistory: [{ id: `${batchId}-c-${index + 1}`, date: today, at: createdAtIso, summary: closureSummary }],
@@ -537,9 +541,16 @@ export default function Home() {
   }
   function editEntry(entry: Entry) {
     setEditingId(entry.id);
-    setDraft({ studentId: entry.studentId, kind: entry.kind, category: entry.category, date: entry.date, note: entry.note, status: entry.status, code: entry.rule?.code ?? "", schoolCategory: entry.rule?.category ?? "", subCategory: entry.rule?.subCategory ?? "", scoreChange: entry.scoreChange ?? entry.rule?.score });
+    const returnToCase = caseId === entry.id;
+    setFormReturnCaseId(returnToCase ? entry.id : null);
+    setDraft({ studentId: entry.studentId, kind: entry.kind, category: entry.category, date: entry.date, note: entry.note, status: entry.status, needsFollowUp: entry.status !== "已結案", code: entry.rule?.code ?? "", schoolCategory: entry.rule?.category ?? "", subCategory: entry.rule?.subCategory ?? "", scoreChange: entry.scoreChange ?? entry.rule?.score });
     setEntryError("");
-    setStudentId(null); setCaseId(null); setCaseReturnStudentId(null); setFormOpen(true);
+    setStudentId(null); setCaseId(null); if (!returnToCase) setCaseReturnStudentId(null); setFormOpen(true);
+  }
+  function closeEntryForm() {
+    setFormOpen(false);
+    if (formReturnCaseId) setCaseId(formReturnCaseId);
+    setFormReturnCaseId(null);
   }
   function saveEntry(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -551,16 +562,23 @@ export default function Home() {
       date: draft.date, note: draft.note.trim(), status: draft.status,
       ...(rule ? ruleRecordFields(rule, scoreChange) : {}),
     };
+    const now = new Date();
     if (editingId) {
-      setEntries((current) => current.map((e) => e.id === editingId ? { ...e, ...savedDraft } : e));
-      setNotice("紀錄已更新");
+      setEntries((current) => current.map((e) => {
+        if (e.id !== editingId) return e;
+        const corrected = { ...e, ...savedDraft, status: e.status };
+        return draft.needsFollowUp ? corrected : completeCase(corrected, DIRECT_CLOSURE_REASON, now, true);
+      }));
+      setNotice(!draft.needsFollowUp && draft.status !== "已結案" ? "紀錄已更正並直接完結" : "紀錄已更新，原有跟進記錄已保留");
+      if (formReturnCaseId) setCaseId(formReturnCaseId);
     } else {
-      const id = "r" + Date.now();
-      setEntries((current) => [{ ...savedDraft, id }, ...current]);
+      const id = "r" + now.getTime();
+      const created: Entry = { ...savedDraft, id };
+      setEntries((current) => [draft.needsFollowUp ? created : completeCase(created, DIRECT_CLOSURE_REASON, now, true), ...current]);
       setCaseId(id);
-      setNotice("新紀錄已加入");
+      setNotice(draft.needsFollowUp ? "新紀錄已加入" : "新紀錄已建立並直接完結");
     }
-    setFormOpen(false); navigate("records");
+    setFormOpen(false); setFormReturnCaseId(null); if (!formReturnCaseId) navigate("records");
   }
   function openCase(id: string) {
     setCaseReturnStudentId(studentId);
@@ -584,17 +602,16 @@ export default function Home() {
     setEntries((current) => current.map((e) => e.id === id && e.status !== "已結案" ? { ...e, status: "跟進中", followUps: [...(e.followUps ?? []), item] } : e));
     setNotice("跟進記錄已加入");
   }
-  function closeCase(id: string, summary: string) {
+  function closeCase(id: string, summary: string, direct = false) {
     const trimmed = summary.trim(); if (!trimmed) return;
     const now = new Date();
-    const closure: Closure = { id: "c" + now.getTime(), date: now.toLocaleDateString("sv-SE"), at: now.toISOString(), summary: trimmed };
-    setEntries((current) => current.map((e) => e.id === id && e.status !== "已結案" ? { ...e, status: "已結案", resolution: trimmed, closedAt: closure.date, closureHistory: [...(e.closureHistory ?? []), closure] } : e));
-    setNotice("個案已結案");
+    setEntries((current) => current.map((e) => e.id === id ? completeCase(e, trimmed, now, direct) : e));
+    setNotice(direct ? "個案已直接完結，原有跟進記錄已保留" : "個案已結案");
   }
   function reopenCase(id: string) {
     const now = new Date();
     setEntries((current) => current.map((e) => e.id === id && e.status === "已結案" ? {
-      ...e, status: "跟進中", resolution: undefined, closedAt: undefined,
+      ...e, status: "跟進中", resolution: undefined, closedAt: undefined, closedWithoutFollowUp: false,
       followUps: [...(e.followUps ?? []), {
         id: "f" + now.getTime(), date: now.toLocaleDateString("sv-SE"), at: now.toISOString(), type: "reopened",
         author: "訓育組", note: "重新開啟個案。前次結案摘要：" + (e.resolution ?? "未提供"),
@@ -740,11 +757,12 @@ export default function Home() {
       </main>
     </div>
     {selected && <div className="overlay" onMouseDown={(e) => { if (e.target === e.currentTarget) setStudentId(null); }}><section className="panel" role="dialog" aria-modal="true" aria-labelledby="student-title"><div className="panel-head"><div><small>STUDENT PROFILE</small><h2 id="student-title">學生資料</h2></div><button type="button" aria-label="關閉學生資料" onClick={() => setStudentId(null)}><X size={20}/></button></div><div className="panel-body"><div className="profile"><Avatar student={selected} large/><div><h3>{selected.name}</h3><p>{selected.className} · 座號 {selected.seat}</p></div></div><div className="profile-facts"><div><span>學號</span><strong>{selected.number}</strong></div><div><span>班級</span><strong>{selected.className}</strong></div><div><span>紀錄總數</span><strong>{selectedEntries.length} 筆</strong></div></div><StudentOverview entries={selectedEntries} today={today} onOpenCase={openCase}/><h3 className="block-title">個人紀錄時間線 <span>{selectedTimeline.length} 項事件</span></h3><p className="timeline-intro">按日期查看紀錄、跟進與結案；紀錄總數指個案數目。</p><StudentTimeline events={selectedTimeline} onOpenCase={openCase}/></div><div className="panel-foot"><button type="button" className="btn primary wide" onClick={() => addEntry(selected.id)}><Plus size={17}/>為此學生新增紀錄</button></div></section></div>}
-    {formOpen && <div className="overlay" onMouseDown={(e) => { if (e.target === e.currentTarget) setFormOpen(false); }}>
+    {formOpen && <div className="overlay" onMouseDown={(e) => { if (e.target === e.currentTarget) closeEntryForm(); }}>
       <section className="panel" role="dialog" aria-modal="true" aria-labelledby="form-title">
-        <div className="panel-head"><div><small>CONDUCT RECORD</small><h2 id="form-title">{editingId ? "編輯訓育紀錄" : "新增訓育紀錄"}</h2></div><button type="button" aria-label="關閉表單" onClick={() => setFormOpen(false)}><X size={20}/></button></div>
+        <div className="panel-head"><div><small>CONDUCT RECORD</small><h2 id="form-title">{formReturnCaseId ? "1 建立紀錄 · 更正資料" : editingId ? "編輯訓育紀錄" : "新增訓育紀錄"}</h2></div><button type="button" aria-label="關閉表單" onClick={closeEntryForm}><X size={20}/></button></div>
         <form className="entry-form" onSubmit={saveEntry}><div className="panel-body">
           <p className="form-intro">選擇校本事項 Code，再填寫事件內容及日期。</p>
+          {formReturnCaseId && <p className="case-edit-hint">儲存後會返回原個案；已有的跟進安排及記錄會保留。</p>}
           <div className="field-row"><label className="field"><span>班別 *</span><select value={draftStudent.className} onChange={(e) => { const first = students.find((s) => s.className === e.target.value); if (first) setDraft({ ...draft, studentId: first.id }); }} required>{classes.slice(1).map((className) => <option key={className}>{className}</option>)}</select></label><label className="field"><span>學生姓名 *</span><select value={draft.studentId} onChange={(e) => setDraft({ ...draft, studentId: e.target.value })} required>{draftClassStudents.map((s) => <option value={s.id} key={s.id}>{s.name}</option>)}</select></label></div>
           <label className="field"><span>學號</span><input value={draftStudent.number} readOnly/></label>
           <RulePicker id="entry-rule" value={draft} required={draftCodeRequired} onChange={(value) => { setDraft((current) => ({ ...current, ...value })); setEntryError(""); }}/>
@@ -754,9 +772,13 @@ export default function Home() {
           </div>}
           <label className="field"><span>日期 *</span><input type="date" value={draft.date} onChange={(e) => setDraft({ ...draft, date: e.target.value })} required/></label>
           <label className="field"><span>內容說明 *</span><textarea rows={5} maxLength={300} placeholder="簡述事件、已採取的行動或後續安排…" value={draft.note} onChange={(e) => setDraft({ ...draft, note: e.target.value })} required/><small>{draft.note.length}/300 字</small></label>
+          {draft.status !== "已結案" ? <fieldset className="entry-follow-field batch-follow-field"><legend>儲存後是否需要跟進？</legend><div className="batch-follow-options">
+            <label className={draft.needsFollowUp ? "active" : ""}><input type="radio" name="entry-follow-up" checked={draft.needsFollowUp} onChange={() => setDraft({ ...draft, needsFollowUp: true })}/><span><strong>需要跟進</strong><small>{draft.status === "跟進中" ? "保留目前跟進中的狀態" : "列入待辦，之後安排跟進"}</small></span></label>
+            <label className={!draft.needsFollowUp ? "active" : ""}><input type="radio" name="entry-follow-up" checked={!draft.needsFollowUp} onChange={() => setDraft({ ...draft, needsFollowUp: false })}/><span><strong>不需跟進，直接完結</strong><small>保留紀錄及結案時間，不列入待辦</small></span></label>
+          </div></fieldset> : <p className="case-edit-hint">此個案已結案，更正資料不會重新開啟跟進。</p>}
           {entryError && <p className="rule-error" role="alert">{entryError}</p>}
           <p className="form-warning"><ShieldCheck size={16}/>這是前端示範版。資料只會在目前頁面暫時顯示。</p>
-        </div><div className="panel-foot"><button type="button" className="btn secondary" onClick={() => setFormOpen(false)}>取消</button><button type="submit" className="btn primary" disabled={!!draftRule.error || (draftCodeRequired && !draftRule.rule)}><Check size={17}/>{editingId ? "儲存變更" : "建立紀錄"}</button></div></form>
+        </div><div className="panel-foot entry-form-actions"><button type="button" className="btn secondary" onClick={closeEntryForm}>{formReturnCaseId ? "取消並返回個案" : "取消"}</button><button type="submit" className="btn primary" disabled={!!draftRule.error || (draftCodeRequired && !draftRule.rule)}><Check size={17}/>{!draft.needsFollowUp && draft.status !== "已結案" ? editingId ? "儲存並完結" : "建立並完結" : formReturnCaseId ? "儲存更正並返回" : editingId ? "儲存變更" : "建立紀錄"}</button></div></form>
       </section>
     </div>}
     {batchFormOpen && <BatchRecordPanel
@@ -1258,14 +1280,31 @@ function CasePanel({ entry, student, onClose, onEdit, onSavePlan, onStart, onAdd
   entry: Entry; student: Student; onClose: () => void; onEdit: () => void;
   onSavePlan: (id: string, assignee: string, dueDate: string) => void;
   onStart: (id: string) => void; onAddFollowUp: (id: string, note: string) => void;
-  onCloseCase: (id: string, summary: string) => void; onReopen: (id: string) => void;
+  onCloseCase: (id: string, summary: string, direct?: boolean) => void; onReopen: (id: string) => void;
 }) {
   const [assignee, setAssignee] = useState(entry.assignee ?? "");
   const [dueDate, setDueDate] = useState(entry.dueDate ?? "");
   const [followUpNote, setFollowUpNote] = useState("");
   const [resolution, setResolution] = useState("");
+  const [directCloseOpen, setDirectCloseOpen] = useState(false);
+  const [directCloseReason, setDirectCloseReason] = useState("");
   const isClosed = entry.status === "已結案";
   const followUps = entry.followUps ?? [];
+  const followUpSkipped = isClosed && entry.closedWithoutFollowUp && !followUps.length;
+  const hasUnsavedFollowUp = assignee !== (entry.assignee ?? "") || dueDate !== (entry.dueDate ?? "") || !!followUpNote.trim() || !!resolution.trim();
+
+  function returnToRecord() {
+    if ((hasUnsavedFollowUp || directCloseReason.trim()) && !window.confirm("尚未儲存的跟進內容會被捨棄；已儲存的記錄不受影響。確定返回更正？")) return;
+    onEdit();
+  }
+  function submitDirectClosure(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (hasUnsavedFollowUp && !window.confirm("尚未儲存的跟進內容不會保存。確定直接完結？")) return;
+    onCloseCase(entry.id, directCloseReason.trim() || DIRECT_CLOSURE_REASON, true);
+    setDirectCloseOpen(false); setDirectCloseReason("");
+    setFollowUpNote(""); setResolution("");
+    setAssignee(entry.assignee ?? ""); setDueDate(entry.dueDate ?? "");
+  }
 
   function submitFollowUp(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -1286,9 +1325,18 @@ function CasePanel({ entry, student, onClose, onEdit, onSavePlan, onStart, onAdd
       <div className="panel-body case-body">
         <div className="case-person"><Avatar student={student} large/><div><h3>{student.name}</h3><p>{student.className} · 學號 {student.number}</p></div><StatusTag status={entry.status}/></div>
         <div className="case-steps" aria-label="個案流程">
-          <span className="active">1 建立紀錄</span><span className={entry.status !== "待跟進" ? "active" : ""}>2 跟進處理</span><span className={isClosed ? "active" : ""}>3 結案</span>
+          <button type="button" className="active" onClick={returnToRecord} title="返回建立紀錄，更正資料" aria-label="1 建立紀錄：返回更正">1 建立紀錄<FilePenLine size={14}/></button><span className={followUpSkipped ? "skipped" : entry.status !== "待跟進" ? "active" : ""} aria-current={entry.status === "跟進中" ? "step" : undefined}>{followUpSkipped ? "2 不需跟進" : "2 跟進處理"}</span><span className={isClosed ? "active" : ""} aria-current={isClosed ? "step" : undefined}>3 結案</span>
         </div>
-        <section className="case-section"><div className="case-section-head"><h3>事項資料</h3><button type="button" className="row-button" onClick={onEdit}><FilePenLine size={14}/>編輯紀錄</button></div>
+        <p className="case-flow-hint">按「1 建立紀錄」可返回更正，已儲存的跟進記錄會保留。</p>
+        {!isClosed && <div className="case-direct-close">
+          {!directCloseOpen ? <button type="button" className="btn secondary" onClick={() => setDirectCloseOpen(true)}><CheckCircle2 size={16}/>不需跟進，直接完結</button> : <form onSubmit={submitDirectClosure}>
+            <strong>確認直接完結此個案？</strong>
+            <p>將標記為已結案，不再列入待辦；已儲存的跟進記錄及安排會保留。</p>
+            <label className="field"><span>完結原因（選填）</span><textarea rows={2} maxLength={500} value={directCloseReason} placeholder={DIRECT_CLOSURE_REASON} onChange={(event) => setDirectCloseReason(event.target.value)}/></label>
+            <div className="case-direct-actions"><button type="button" className="btn secondary" onClick={() => setDirectCloseOpen(false)}>繼續跟進</button><button type="submit" className="btn primary"><Check size={16}/>確認直接完結</button></div>
+          </form>}
+        </div>}
+        <section className="case-section"><div className="case-section-head"><h3>事項資料</h3><button type="button" className="row-button" onClick={returnToRecord}><FilePenLine size={14}/>編輯紀錄</button></div>
           <div className="case-facts"><div><span>紀錄日期</span><strong>{dateLabel(entry.date)}</strong></div><div><span>類型</span><KindTag kind={entry.kind}/></div><div><span>事項分類</span><strong>{entry.category}</strong></div></div>
           {entry.rule && <RuleDetails rule={entry.rule} scoreChange={entry.scoreChange}/>}
           <p className="case-description">{entry.note}</p>
