@@ -243,3 +243,13 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 .overview-latest>span{min-width:0}
 .overview-latest>span>span{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;overflow-wrap:anywhere;font-size:11px;line-height:1.7;color:#687f85}
 .overview-note{margin:12px 0 0;font-size:10px}
+.school-base-scores{margin:18px 0;padding-bottom:16px;border-bottom:1px solid #dcebe7}
+.school-base-scores h4{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;margin:0 0 12px;font-size:.875rem;color:#294c50}
+.school-base-scores h4>span{font-size:.75rem;font-weight:400;color:#62787c}
+.school-score-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:0}
+.school-score-grid>div{min-width:0;padding:14px 6px;border:1px solid #d6e7e1;border-top:3px solid var(--teal);border-radius:8px;background:#fff;text-align:center}
+.school-score-grid dt{font-size:.875rem;font-weight:700;color:#345a54}
+.school-score-grid dd{margin:8px 0 0;font-size:1.75rem;font-weight:800;line-height:1.2;font-variant-numeric:tabular-nums;color:#173e3a}
+.school-score-grid dd>span{font-size:.75rem;font-weight:400;color:#62787c}
+.school-base-scores p{margin:12px 0 0;font-size:.8125rem;line-height:1.75;color:#526b6f}
+@media(max-width:360px){.school-score-grid{grid-template-columns:1fr}.school-score-grid>div{display:flex;align-items:center;justify-content:space-between;padding:10px 14px}.school-score-grid dd{margin:0}}

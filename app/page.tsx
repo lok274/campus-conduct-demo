@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent as ReactKeyboardEvent, type RefObject } from "react";
 import { ArrowRight, ArrowUpDown, BookOpenCheck, CalendarDays, Check, CheckCircle2, ChevronDown, ChevronRight, ClipboardList, Clock3, FilePenLine, Filter, HeartHandshake, LayoutDashboard, Menu, Plus, RotateCcw, Search, ShieldCheck, SlidersHorizontal, Sparkles, UsersRound, X } from "lucide-react";
+import { SCHOOL_BASE_SCORES, SCHOOL_CATEGORIES } from "../lib/school-rules";
 
 type Page = "dashboard" | "todos" | "students" | "records";
 type Kind = "嘉許" | "提醒" | "違規";
@@ -1165,6 +1166,16 @@ function StudentOverview({ entries, today, onOpenCase }: { entries: Entry[]; tod
   const counts = (["嘉許", "提醒", "違規"] as Kind[]).map((kind) => ({ kind, count: scoped.filter((entry) => entry.kind === kind).length }));
   return <section className="student-overview" aria-labelledby="student-overview-title">
     <div className="overview-heading"><h3 id="student-overview-title"><BookOpenCheck size={17}/>學生概況摘要</h3><label><span className="sr-only">摘要紀錄期間</span><select value={period} onChange={(event) => setPeriod(event.target.value)}><option value="all">全部紀錄</option><option value="30">近 30 日</option></select></label></div>
+    <section className="school-base-scores" aria-labelledby="school-base-scores-title">
+      <h4 id="school-base-scores-title">校本基礎分 <span>BaseScore</span></h4>
+      <dl className="school-score-grid">
+        {SCHOOL_CATEGORIES.map((category) => <div key={category}>
+          <dt>{category}</dt>
+          <dd>{SCHOOL_BASE_SCORES[category]}<span> 分</span></dd>
+        </div>)}
+      </dl>
+      <p>每位學生均採用以上起始分，不受紀錄期間影響。目前尚未套用獎懲加減分。</p>
+    </section>
     <p className="overview-period">{period === "all" ? "全部已登記紀錄" : `${dateLabel(start)} — ${dateLabel(today)} · 按事件日期`}</p>
     <div className="overview-counts">{counts.map(({ kind, count }) => <div key={kind}><KindTag kind={kind}/><strong>{count}<small> 筆</small></strong></div>)}</div>
     <p className="overview-description" aria-live="polite">{!entries.length ? "尚未登記任何紀錄，暫無足夠資料整理學生概況。" : !scoped.length ? "此期間沒有新增紀錄，可切換「全部紀錄」查看其他日期的資料。" : `此期間共有 ${scoped.length} 筆紀錄，其中 ${closed} 筆目前已結案、${scoped.length - closed} 筆仍需跟進。`}</p>
