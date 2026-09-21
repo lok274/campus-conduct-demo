@@ -774,7 +774,7 @@ export default function Home() {
           <label className="field"><span>內容說明 *</span><textarea rows={5} maxLength={300} placeholder="簡述事件、已採取的行動或後續安排…" value={draft.note} onChange={(e) => setDraft({ ...draft, note: e.target.value })} required/><small>{draft.note.length}/300 字</small></label>
           {draft.status !== "已結案" ? <fieldset className="entry-follow-field batch-follow-field"><legend>儲存後是否需要跟進？</legend><div className="batch-follow-options">
             <label className={draft.needsFollowUp ? "active" : ""}><input type="radio" name="entry-follow-up" checked={draft.needsFollowUp} onChange={() => setDraft({ ...draft, needsFollowUp: true })}/><span><strong>需要跟進</strong><small>{draft.status === "跟進中" ? "保留目前跟進中的狀態" : "列入待辦，之後安排跟進"}</small></span></label>
-            <label className={!draft.needsFollowUp ? "active" : ""}><input type="radio" name="entry-follow-up" checked={!draft.needsFollowUp} onChange={() => setDraft({ ...draft, needsFollowUp: false })}/><span><strong>不需跟進，直接完結</strong><small>保留紀錄及結案時間，不列入待辦</small></span></label>
+            <label className={!draft.needsFollowUp ? "active" : ""}><input type="radio" name="entry-follow-up" checked={!draft.needsFollowUp} onChange={() => setDraft({ ...draft, needsFollowUp: false })}/><span><strong>不需跟進</strong><small>保留紀錄及結案時間，不列入待辦</small></span></label>
           </div></fieldset> : <p className="case-edit-hint">此個案已結案，更正資料不會重新開啟跟進。</p>}
           {entryError && <p className="rule-error" role="alert">{entryError}</p>}
           <p className="form-warning"><ShieldCheck size={16}/>這是前端示範版。資料只會在目前頁面暫時顯示。</p>
