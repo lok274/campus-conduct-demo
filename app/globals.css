@@ -261,6 +261,13 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 .rule-details dt{font-size:.75rem;color:#62787c}
 .rule-details dd{margin:4px 0 0;font-size:.875rem;color:#294c50}
 .rule-details>p{margin:0;font-size:.75rem;line-height:1.7;color:#62787c}
+.rule-score-picker{margin:0 0 16px;padding:14px;border:1px solid #bdded2;border-radius:8px;background:#edf7f3}
+.rule-score-picker .field{margin-bottom:8px}
+.rule-score-picker p{margin:0;font-size:.875rem;line-height:1.7;color:#405f58}
+.rule-picker .field select:disabled{opacity:1;background:#f1f4f3;color:#526b6f;cursor:not-allowed}
+.rule-details .rule-selected-score{grid-column:1/-1;border-top:1px solid #e0ebe6;padding-top:12px}
+.rule-details .rule-selected-score dt{font-size:.875rem}
+.rule-details .rule-selected-score dd{font-size:1rem;font-weight:800;color:#176b60}
 .legacy-rule{margin:0 0 18px}
 .kind-守規{background:#e6f6ef;color:#176b60}.kind-勤學{background:#edf2fb;color:#405f8c}.kind-勤到{background:#f1edfa;color:#6b5192}
 @media(max-width:360px){.rule-details dl{grid-template-columns:1fr}.rule-picker{padding:10px}}

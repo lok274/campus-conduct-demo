@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent as ReactKeyboardEvent, type RefObject } from "react";
 import { ArrowRight, ArrowUpDown, BookOpenCheck, CalendarDays, Check, CheckCircle2, ChevronDown, ChevronRight, ClipboardList, Clock3, FilePenLine, Filter, HeartHandshake, LayoutDashboard, Menu, Plus, RotateCcw, Search, ShieldCheck, SlidersHorizontal, Sparkles, UsersRound, X } from "lucide-react";
 import { SCHOOL_BASE_SCORES, SCHOOL_CATEGORIES, type SchoolCategory } from "../lib/school-rules";
-import { resolveRule, ruleRecordFields, ruleSearchText, type ConductRule, type RuleInput } from "../lib/conduct-rules";
+import { resolveRuleSelection, ruleRecordFields, ruleSearchText, type ConductRule, type RuleInput } from "../lib/conduct-rules";
 import { RuleDetails, RulePicker } from "../components/rule-picker";
 
 type Page = "dashboard" | "todos" | "students" | "records";
@@ -26,7 +26,7 @@ type TimelineEvent = {
 };
 type Entry = {
   id: string; studentId: string; kind: Kind; category: string; date: string; note: string; status: Status;
-  rule?: ConductRule;
+  rule?: ConductRule; scoreChange?: number;
   batchId?: string; assignee?: string; dueDate?: string; followUps?: FollowUp[]; resolution?: string; closedAt?: string; closureHistory?: Closure[];
 };
 type Draft = Pick<Entry, "studentId" | "kind" | "category" | "date" | "note" | "status"> & RuleInput;
@@ -402,12 +402,13 @@ export default function Home() {
   ).sort(compareStudentClass);
   const batchSelectedStudents = students.filter((student) => batchSelectedIdSet.has(student.id)).sort(compareStudentClass);
   const batchAllVisibleSelected = batchVisibleStudents.length > 0 && batchVisibleStudents.every((student) => batchSelectedIdSet.has(student.id));
-  const batchRule = resolveRule(batchDraft);
-  const batchRecordFields = batchRule.rule ? ruleRecordFields(batchRule.rule) : batchDraft;
+  const batchRule = resolveRuleSelection(batchDraft);
+  const batchRecordFields = batchRule.rule ? ruleRecordFields(batchRule.rule, batchRule.scoreChange) : batchDraft;
   const batchDuplicateStudentIds = new Set(batchDraft.note.trim() ? batchSelectedStudents.filter((student) => entries.some((entry) =>
     entry.studentId === student.id && entry.date === batchDraft.date && entry.kind === batchRecordFields.kind &&
     entry.category === batchRecordFields.category && entry.rule?.code === batchRule.rule?.code &&
-    entry.rule?.category === batchRule.rule?.category && normalizeRecordNote(entry.note) === normalizeRecordNote(batchDraft.note)
+    entry.rule?.category === batchRule.rule?.category && (entry.scoreChange ?? entry.rule?.score) === batchRule.scoreChange &&
+    normalizeRecordNote(entry.note) === normalizeRecordNote(batchDraft.note)
   )).map((student) => student.id) : []);
   const batchStudentsToCreate = batchSelectedStudents.filter((student) => !batchSkipDuplicates || !batchDuplicateStudentIds.has(student.id));
   const selected = studentId ? studentMap.get(studentId) : undefined;
@@ -415,7 +416,7 @@ export default function Home() {
   const selectedTimeline = buildStudentTimeline(selectedEntries);
   const draftStudent = studentMap.get(draft.studentId) ?? students[0];
   const draftClassStudents = students.filter((s) => s.className === draftStudent.className);
-  const draftRule = resolveRule(draft);
+  const draftRule = resolveRuleSelection(draft);
   const draftCodeRequired = !editingId || !!entries.find((entry) => entry.id === editingId)?.rule;
   const selectedCase = caseId ? entries.find((e) => e.id === caseId) : undefined;
   const caseStudent = selectedCase ? studentMap.get(selectedCase.studentId) : undefined;
@@ -499,7 +500,7 @@ export default function Home() {
     setBatchError(""); setBatchStep("review");
   }
   function confirmBatchEntries() {
-    const { rule, error } = resolveRule(batchDraft);
+    const { rule, scoreChange, error } = resolveRuleSelection(batchDraft);
     if (error || !rule) { setBatchError(error || "請選擇或輸入有效的 Code。"); setBatchStep("details"); return; }
     if (!batchStudentsToCreate.length) { setBatchError("所選學生已有完全相同的紀錄；請返回修改，或取消略過重複紀錄。"); return; }
     const createdAt = Date.now();
@@ -511,7 +512,7 @@ export default function Home() {
       id: `${batchId}-${index + 1}`,
       batchId,
       studentId: student.id,
-      ...ruleRecordFields(rule),
+      ...ruleRecordFields(rule, scoreChange),
       date: batchDraft.date,
       note,
       status: batchDraft.needsFollowUp ? "待跟進" : "已結案",
@@ -536,19 +537,19 @@ export default function Home() {
   }
   function editEntry(entry: Entry) {
     setEditingId(entry.id);
-    setDraft({ studentId: entry.studentId, kind: entry.kind, category: entry.category, date: entry.date, note: entry.note, status: entry.status, code: entry.rule?.code ?? "", schoolCategory: entry.rule?.category ?? "", subCategory: entry.rule?.subCategory ?? "" });
+    setDraft({ studentId: entry.studentId, kind: entry.kind, category: entry.category, date: entry.date, note: entry.note, status: entry.status, code: entry.rule?.code ?? "", schoolCategory: entry.rule?.category ?? "", subCategory: entry.rule?.subCategory ?? "", scoreChange: entry.scoreChange ?? entry.rule?.score });
     setEntryError("");
     setStudentId(null); setCaseId(null); setCaseReturnStudentId(null); setFormOpen(true);
   }
   function saveEntry(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!draft.studentId || !draft.date || !draft.category || !draft.note.trim()) return;
-    const { rule, error } = resolveRule(draft);
+    const { rule, scoreChange, error } = resolveRuleSelection(draft);
     if (error || (draftCodeRequired && !rule)) { setEntryError(error || "請選擇或輸入有效的 Code。"); return; }
     const savedDraft = {
       studentId: draft.studentId, kind: draft.kind, category: draft.category,
       date: draft.date, note: draft.note.trim(), status: draft.status,
-      ...(rule ? ruleRecordFields(rule) : {}),
+      ...(rule ? ruleRecordFields(rule, scoreChange) : {}),
     };
     if (editingId) {
       setEntries((current) => current.map((e) => e.id === editingId ? { ...e, ...savedDraft } : e));
@@ -895,7 +896,7 @@ function BatchRecordPanel({
   const stepIndex = steps.findIndex((item) => item.id === step);
   const duplicateCount = duplicateIds.size;
   const displayedSelected = selectedStudents.slice(0, 6);
-  const selectedRule = resolveRule(draft);
+  const selectedRule = resolveRuleSelection(draft);
   useEffect(() => {
     if (step !== "students") stepContentRef.current?.focus();
   }, [step]);
@@ -957,12 +958,12 @@ function BatchRecordPanel({
       {step === "review" && <div className="entry-form">
         <div className="panel-body batch-body" ref={stepContentRef} tabIndex={-1} aria-label="批次建立第 3 步：核對建立">
           <div className="batch-review-hero"><span><ClipboardList size={23}/></span><div><small>準備建立</small><strong>{createCount} 筆獨立紀錄</strong><p>建立後，每位學生的時間線及個案會分開顯示。</p></div></div>
-          {selectedRule.rule && <RuleDetails rule={selectedRule.rule}/>}
+          {selectedRule.rule && <RuleDetails rule={selectedRule.rule} scoreChange={selectedRule.scoreChange}/>}
           <div className="batch-review-grid"><div><span>日期</span><strong>{dateLabel(draft.date)}</strong></div><div><span>跟進狀態</span><strong>{draft.needsFollowUp ? "待跟進" : "無需跟進（已結案）"}</strong></div>{draft.needsFollowUp && <><div><span>負責人</span><strong>{draft.assignee.trim() || "未指定"}</strong></div><div><span>跟進期限</span><strong>{draft.dueDate ? dateLabel(draft.dueDate) : "未設定"}</strong></div></>}</div>
           <div className="batch-review-note"><span>內容說明</span><p>{draft.note.trim()}</p></div>
           <div className="batch-review-list-head"><div><strong>學生名單</strong><span>{selectedStudents.length} 位</span></div>{duplicateCount > 0 && <b>{duplicateCount} 筆可能重複</b>}</div>
           <div className="batch-review-list">{selectedStudents.map((student) => <div key={student.id} className={duplicateIds.has(student.id) ? "duplicate" : ""}><Avatar student={student}/><span><strong>{student.name}</strong><small>{student.className} · 座號 {student.seat} · {student.number}</small></span>{duplicateIds.has(student.id) ? <em>{skipDuplicates ? "將略過" : "仍會建立"}</em> : <CheckCircle2 size={17}/>}</div>)}</div>
-          {duplicateCount > 0 && <label className="batch-duplicate-option"><input type="checkbox" checked={skipDuplicates} onChange={(event) => onSkipDuplicatesChange(event.target.checked)}/><span><strong>略過 {duplicateCount} 筆完全重複紀錄</strong><small>同一學生、日期、校本範疇、Code 及內容完全相同。</small></span></label>}
+          {duplicateCount > 0 && <label className="batch-duplicate-option"><input type="checkbox" checked={skipDuplicates} onChange={(event) => onSkipDuplicatesChange(event.target.checked)}/><span><strong>略過 {duplicateCount} 筆完全重複紀錄</strong><small>同一學生、日期、校本範疇、Code、加減分數及內容完全相同。</small></span></label>}
           {createCount === 0 && <p className="batch-error" role="alert">全部所選學生已有相同紀錄。請取消「略過重複紀錄」，或返回修改內容。</p>}
           {error && <p className="batch-error" role="alert">{error}</p>}
         </div>
@@ -1289,7 +1290,7 @@ function CasePanel({ entry, student, onClose, onEdit, onSavePlan, onStart, onAdd
         </div>
         <section className="case-section"><div className="case-section-head"><h3>事項資料</h3><button type="button" className="row-button" onClick={onEdit}><FilePenLine size={14}/>編輯紀錄</button></div>
           <div className="case-facts"><div><span>紀錄日期</span><strong>{dateLabel(entry.date)}</strong></div><div><span>類型</span><KindTag kind={entry.kind}/></div><div><span>事項分類</span><strong>{entry.category}</strong></div></div>
-          {entry.rule && <RuleDetails rule={entry.rule}/>}
+          {entry.rule && <RuleDetails rule={entry.rule} scoreChange={entry.scoreChange}/>}
           <p className="case-description">{entry.note}</p>
         </section>
         <section className="case-section"><div className="case-section-head"><h3>跟進安排</h3></div>
