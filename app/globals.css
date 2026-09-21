@@ -66,6 +66,8 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 .case-follow-form{margin-top:18px}
 .case-closing .btn{margin-top:3px}
 .case-closing .case-description{margin:8px 0 12px}
+.case-closed-actions{display:flex;flex-wrap:wrap;align-items:center;gap:12px}
+.case-closed-actions>.primary{margin-left:auto}
 @media(max-width:620px){.case-panel{width:100%}.case-steps{gap:4px}.case-steps>button{flex-wrap:wrap}.case-person{flex-wrap:wrap}.case-person .status-tag{margin-left:auto}.case-facts{grid-template-columns:repeat(2,minmax(0,1fr))}}
 
 /* Student history across cases */
