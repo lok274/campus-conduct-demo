@@ -72,10 +72,10 @@ const categories: Record<LegacyKind, string[]> = {
 const currentLocalDate = () => new Date().toLocaleDateString("sv-SE");
 const newDraft = (): Draft => ({
   studentId: students[0].id, kind: "嘉許", category: "服務精神",
-  date: currentLocalDate(), note: "", status: "待跟進", code: "", schoolCategory: "",
+  date: currentLocalDate(), note: "", status: "待跟進", code: "", schoolCategory: "", subCategory: "",
 });
 const newBatchDraft = (): BatchDraft => ({
-  kind: "嘉許", category: "服務精神", date: currentLocalDate(), note: "", needsFollowUp: false, assignee: "", dueDate: "", code: "", schoolCategory: "",
+  kind: "嘉許", category: "服務精神", date: currentLocalDate(), note: "", needsFollowUp: false, assignee: "", dueDate: "", code: "", schoolCategory: "", subCategory: "",
 });
 const dateLabel = (date: string) => date.replaceAll("-", "/");
 const normalizeRecordNote = (note: string) => note.trim().replace(/\s+/g, " ");
@@ -536,7 +536,7 @@ export default function Home() {
   }
   function editEntry(entry: Entry) {
     setEditingId(entry.id);
-    setDraft({ studentId: entry.studentId, kind: entry.kind, category: entry.category, date: entry.date, note: entry.note, status: entry.status, code: entry.rule?.code ?? "", schoolCategory: entry.rule?.category ?? "" });
+    setDraft({ studentId: entry.studentId, kind: entry.kind, category: entry.category, date: entry.date, note: entry.note, status: entry.status, code: entry.rule?.code ?? "", schoolCategory: entry.rule?.category ?? "", subCategory: entry.rule?.subCategory ?? "" });
     setEntryError("");
     setStudentId(null); setCaseId(null); setCaseReturnStudentId(null); setFormOpen(true);
   }

@@ -1,5 +1,5 @@
 import data from "./conduct-rules.json";
-import type { SchoolCategory } from "./school-rules";
+import { SCHOOL_CATEGORIES, type SchoolCategory } from "./school-rules";
 
 export type ConductRule = {
   code: string;
@@ -10,13 +10,23 @@ export type ConductRule = {
   minScore: number;
   maxScore: number;
 };
-export type RuleInput = { code: string; schoolCategory: SchoolCategory | "" };
+export type RuleInput = { code: string; schoolCategory: SchoolCategory | ""; subCategory?: string };
 
 // Source: 訓育database.xlsx, Rules!A2:G191. Code is unique only within Category.
 export const CONDUCT_RULES: readonly ConductRule[] = data as ConductRule[];
 export const normalizeRuleCode = (code: string) => code.normalize("NFKC").trim().toUpperCase();
 export const ruleKey = (rule: ConductRule) => `${rule.category}:${rule.code}`;
 export const scoreLabel = (score: number) => score > 0 ? `+${score}` : String(score);
+
+export function getRuleGroups(schoolCategory: SchoolCategory | "" = "", subCategory = "") {
+  const categories = schoolCategory ? [schoolCategory] : SCHOOL_CATEGORIES;
+  return categories.flatMap((category) => {
+    const rules = CONDUCT_RULES.filter((rule) => rule.category === category);
+    return [...new Set(rules.map((rule) => rule.subCategory))]
+      .filter((name) => !subCategory || name === subCategory)
+      .map((name) => ({ category, subCategory: name, rules: rules.filter((rule) => rule.subCategory === name) }));
+  });
+}
 
 export function resolveRule({ code, schoolCategory }: RuleInput): { rule?: ConductRule; error: string } {
   const normalized = normalizeRuleCode(code);
