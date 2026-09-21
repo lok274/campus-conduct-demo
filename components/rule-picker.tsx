@@ -70,6 +70,6 @@ export function RulePicker({ value, onChange, id, required = true }: {
       </select></label>
       <p id={`${id}-score-help`}>{rule.minScore === rule.maxScore ? "此項目為固定分數，不能調整。" : `可選 ${scoreLabel(rule.minScore)} 至 ${scoreLabel(rule.maxScore)} 分，預設為 ${scoreLabel(rule.score)} 分。切換 Code 會使用新項目的預設分數。`}</p>
     </div>}
-    <div aria-live="polite">{rule && <RuleDetails rule={rule} showSelectedScore={false}/>}</div>
+    <div aria-live="polite">{rule && <RuleDetails rule={rule} scoreChange={scoreChange}/>}</div>
   </fieldset>;
 }
