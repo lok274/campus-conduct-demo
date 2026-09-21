@@ -1163,7 +1163,6 @@ function StudentOverview({ entries, today, onOpenCase }: { entries: Entry[]; tod
   const unscheduled = open.filter((entry) => !entry.dueDate).length;
   const closed = scoped.filter((entry) => entry.status === "已結案").length;
   const latest = buildStudentTimeline(entries)[0];
-  const counts = (["嘉許", "提醒", "違規"] as Kind[]).map((kind) => ({ kind, count: scoped.filter((entry) => entry.kind === kind).length }));
   return <section className="student-overview" aria-labelledby="student-overview-title">
     <div className="overview-heading"><h3 id="student-overview-title"><BookOpenCheck size={17}/>學生概況摘要</h3><label><span className="sr-only">摘要紀錄期間</span><select value={period} onChange={(event) => setPeriod(event.target.value)}><option value="all">全部紀錄</option><option value="30">近 30 日</option></select></label></div>
     <section className="school-base-scores" aria-labelledby="school-base-scores-title">
@@ -1177,7 +1176,6 @@ function StudentOverview({ entries, today, onOpenCase }: { entries: Entry[]; tod
       <p>每位學生均採用以上起始分，不受紀錄期間影響。目前尚未套用獎懲加減分。</p>
     </section>
     <p className="overview-period">{period === "all" ? "全部已登記紀錄" : `${dateLabel(start)} — ${dateLabel(today)} · 按事件日期`}</p>
-    <div className="overview-counts">{counts.map(({ kind, count }) => <div key={kind}><KindTag kind={kind}/><strong>{count}<small> 筆</small></strong></div>)}</div>
     <p className="overview-description" aria-live="polite">{!entries.length ? "尚未登記任何紀錄，暫無足夠資料整理學生概況。" : !scoped.length ? "此期間沒有新增紀錄，可切換「全部紀錄」查看其他日期的資料。" : `此期間共有 ${scoped.length} 筆紀錄，其中 ${closed} 筆目前已結案、${scoped.length - closed} 筆仍需跟進。`}</p>
     <div className="overview-followup-heading"><h4>目前跟進事項</h4><span>所有日期 · {open.length} 項未結案</span></div>
     {open.length > 0 ? <>
