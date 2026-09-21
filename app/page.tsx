@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent as ReactKeyboardEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent as ReactKeyboardEvent, type RefObject } from "react";
 import { ArrowRight, ArrowUpDown, BookOpenCheck, CalendarDays, Check, CheckCircle2, ChevronDown, ChevronRight, ClipboardList, Clock3, FilePenLine, Filter, HeartHandshake, LayoutDashboard, Menu, Plus, RotateCcw, Search, ShieldCheck, SlidersHorizontal, Sparkles, UsersRound, X } from "lucide-react";
 
 type Page = "dashboard" | "todos" | "students" | "records";
@@ -27,6 +27,15 @@ type Entry = {
 type Draft = Pick<Entry, "studentId" | "kind" | "category" | "date" | "note" | "status">;
 type BatchDraft = Pick<Entry, "kind" | "category" | "date" | "note"> & { needsFollowUp: boolean; assignee: string; dueDate: string };
 type BatchStep = "students" | "details" | "review";
+type GlobalSearchResult = {
+  id: string;
+  type: "student" | "record";
+  title: string;
+  meta: string;
+  description: string;
+  studentId: string;
+  recordId?: string;
+};
 const ALL_ASSIGNEES = "__filter_all_assignees__";
 const UNASSIGNED = "__filter_unassigned__";
 
@@ -139,6 +148,9 @@ export default function Home() {
   const [todoAssigneeFilter, setTodoAssigneeFilter] = useState(ALL_ASSIGNEES);
   const [todoSort, setTodoSort] = useState<TodoSort>("priority");
   const [todoFiltersOpen, setTodoFiltersOpen] = useState(false);
+  const [globalSearch, setGlobalSearch] = useState("");
+  const [globalSearchOpen, setGlobalSearchOpen] = useState(false);
+  const [globalSearchActiveIndex, setGlobalSearchActiveIndex] = useState(0);
   const [menuOpen, setMenuOpen] = useState(false);
   const [studentId, setStudentId] = useState<string | null>(null);
   const [caseId, setCaseId] = useState<string | null>(null);
@@ -158,6 +170,8 @@ export default function Home() {
   const [notice, setNotice] = useState("");
   const [today, setToday] = useState(currentLocalDate);
   const batchButtonRef = useRef<HTMLButtonElement>(null);
+  const globalSearchRef = useRef<HTMLDivElement>(null);
+  const globalSearchInputRef = useRef<HTMLInputElement>(null);
   const batchHasChanges = batchStudentIds.length > 0 || batchDraft.note.trim() !== "" || batchDraft.kind !== "嘉許" ||
     batchDraft.category !== "服務精神" || batchDraft.date !== today || batchDraft.needsFollowUp ||
     batchDraft.assignee.trim() !== "" || batchDraft.dueDate !== "";
@@ -195,6 +209,24 @@ export default function Home() {
     window.addEventListener("keydown", close);
     return () => window.removeEventListener("keydown", close);
   }, [formOpen, batchFormOpen, batchHasChanges, studentId, caseId, caseReturnStudentId]);
+  useEffect(() => {
+    const openWithShortcut = (event: KeyboardEvent) => {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
+        event.preventDefault();
+        setGlobalSearchOpen(true);
+        window.setTimeout(() => globalSearchInputRef.current?.focus(), 0);
+      }
+    };
+    const closeWhenOutside = (event: PointerEvent) => {
+      if (globalSearchRef.current && !globalSearchRef.current.contains(event.target as Node)) setGlobalSearchOpen(false);
+    };
+    window.addEventListener("keydown", openWithShortcut);
+    window.addEventListener("pointerdown", closeWhenOutside);
+    return () => {
+      window.removeEventListener("keydown", openWithShortcut);
+      window.removeEventListener("pointerdown", closeWhenOutside);
+    };
+  }, []);
 
   const studentMap = useMemo(() => new Map(students.map((s) => [s.id, s])), []);
   const next7Date = addDays(today, 7);
@@ -290,6 +322,49 @@ export default function Home() {
     const rank = (entry: Entry) => !entry.dueDate ? 3 : entry.dueDate < today ? 0 : entry.dueDate === today ? 1 : 2;
     return rank(a) - rank(b) || (a.dueDate ?? "9999-12-31").localeCompare(b.dueDate ?? "9999-12-31") || latestActivityDate(a).localeCompare(latestActivityDate(b)) || a.id.localeCompare(b.id);
   });
+  const globalQuery = globalSearch.toLocaleLowerCase("zh-Hant").trim();
+  const globalResults = useMemo<GlobalSearchResult[]>(() => {
+    if (!globalQuery) return [];
+    const studentResults: GlobalSearchResult[] = students.flatMap((student) => {
+      const searchable = `${student.name} ${student.className} ${student.number}`.toLocaleLowerCase("zh-Hant");
+      if (!searchable.includes(globalQuery)) return [];
+      const name = student.name.toLocaleLowerCase("zh-Hant");
+      const score = name === globalQuery ? 0 : name.startsWith(globalQuery) ? 1 : name.includes(globalQuery) ? 2 : 3;
+      const stats = studentStats.get(student.id)!;
+      return [{
+        id: `student-${student.id}`,
+        type: "student",
+        title: student.name,
+        meta: `${student.className} · ${student.number}`,
+        description: `${stats.total} 筆紀錄 · ${stats.pending ? `${stats.pending} 項待跟進` : "目前沒有待跟進"}`,
+        studentId: student.id,
+        score,
+      }];
+    });
+    const recordResults: (GlobalSearchResult & { score: number; date: string })[] = entries.flatMap((entry) => {
+      const student = studentMap.get(entry.studentId);
+      if (!student) return [];
+      const searchable = [student.name, student.className, student.number, entry.kind, entry.category, entry.note, entry.assignee ?? "", entry.date, entry.status]
+        .join(" ").toLocaleLowerCase("zh-Hant");
+      if (!searchable.includes(globalQuery)) return [];
+      const studentName = student.name.toLocaleLowerCase("zh-Hant");
+      const score = studentName === globalQuery ? 3 : studentName.startsWith(globalQuery) ? 4 : studentName.includes(globalQuery) ? 5 : 6;
+      return [{
+        id: `record-${entry.id}`,
+        type: "record",
+        title: `${student.name} · ${entry.category}`,
+        meta: `${entry.kind} · ${dateLabel(entry.date)} · ${entry.status}`,
+        description: entry.note,
+        studentId: student.id,
+        recordId: entry.id,
+        score,
+        date: entry.date,
+      }];
+    });
+    return [...studentResults.map((result) => ({ ...result, score: result.type === "student" ? (result.title.toLocaleLowerCase("zh-Hant") === globalQuery ? 0 : result.title.toLocaleLowerCase("zh-Hant").startsWith(globalQuery) ? 1 : 2) : 3, date: "" })), ...recordResults]
+      .sort((a, b) => a.score - b.score || b.date.localeCompare(a.date) || a.title.localeCompare(b.title, "zh-Hant"))
+      .slice(0, 8);
+  }, [entries, globalQuery, studentMap, studentStats]);
   const studentActiveFilters = [
     studentSearch && `搜尋「${studentSearch}」`,
     studentClassFilter !== "全部班級" && studentClassFilter,
@@ -346,6 +421,35 @@ export default function Home() {
     setTodoStatusFilter("全部狀態"); setTodoAssigneeFilter(ALL_ASSIGNEES);
   }
   function navigate(next: Page) { setPage(next); setMenuOpen(false); }
+  function closeGlobalSearch() {
+    setGlobalSearchOpen(false);
+    setGlobalSearchActiveIndex(0);
+  }
+  function selectGlobalSearchResult(result: GlobalSearchResult) {
+    closeGlobalSearch();
+    setGlobalSearch("");
+    if (result.type === "student") {
+      navigate("students");
+      setStudentId(result.studentId);
+      return;
+    }
+    if (result.recordId) openCase(result.recordId);
+  }
+  function handleGlobalSearchKeyDown(event: ReactKeyboardEvent<HTMLInputElement>) {
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      setGlobalSearchActiveIndex((index) => globalResults.length ? (index + 1) % globalResults.length : 0);
+    } else if (event.key === "ArrowUp") {
+      event.preventDefault();
+      setGlobalSearchActiveIndex((index) => globalResults.length ? (index - 1 + globalResults.length) % globalResults.length : 0);
+    } else if (event.key === "Enter" && globalResults[globalSearchActiveIndex]) {
+      event.preventDefault();
+      selectGlobalSearchResult(globalResults[globalSearchActiveIndex]);
+    } else if (event.key === "Escape") {
+      event.preventDefault();
+      closeGlobalSearch();
+    }
+  }
   function addEntry(id?: string) {
     setEditingId(null); setDraft({ ...newDraft(), studentId: id || students[0].id });
     setStudentId(null); setCaseId(null); setCaseReturnStudentId(null); setBatchFormOpen(false); setFormOpen(true);
@@ -497,7 +601,20 @@ export default function Home() {
     </aside>
     {menuOpen && <button type="button" className="scrim" aria-label="關閉選單" onClick={() => setMenuOpen(false)}/>}
     <div className="main">
-      <header className="topbar"><button type="button" className="mobile-menu" aria-label="開啟選單" onClick={() => setMenuOpen(true)}><Menu size={21}/></button><div className="crumb">校園管理 <ChevronRight size={14}/> <strong>{title}</strong></div><div className="top-meta"><span><CalendarDays size={15}/> 2026–27 學年</span><b><i/> 示範版</b></div></header>
+      <header className="topbar"><button type="button" className="mobile-menu" aria-label="開啟選單" onClick={() => setMenuOpen(true)}><Menu size={21}/></button><div className="crumb">校園管理 <ChevronRight size={14}/> <strong>{title}</strong></div><GlobalSearch
+        query={globalSearch}
+        open={globalSearchOpen}
+        results={globalResults}
+        activeIndex={globalSearchActiveIndex}
+        inputRef={globalSearchInputRef}
+        containerRef={globalSearchRef}
+        onOpen={() => setGlobalSearchOpen(true)}
+        onClose={closeGlobalSearch}
+        onQueryChange={(value) => { setGlobalSearch(value); setGlobalSearchActiveIndex(0); setGlobalSearchOpen(true); }}
+        onActiveIndexChange={setGlobalSearchActiveIndex}
+        onSelect={selectGlobalSearchResult}
+        onKeyDown={handleGlobalSearchKeyDown}
+      /><div className="top-meta"><span><CalendarDays size={15}/> 2026–27 學年</span><b><i/> 示範版</b></div></header>
       <main className="content">
         <div className="page-heading"><div><small>STUDENT AFFAIRS / 訓育管理</small><h1>{title}</h1><p>{subtitle}</p></div><div className="page-actions">{page === "records" && <button ref={batchButtonRef} type="button" className="btn secondary" onClick={openBatchForm}><UsersRound size={17}/>批次建立</button>}<button type="button" className="btn primary" onClick={() => addEntry()}><Plus size={17}/>新增紀錄</button></div></div>
         {page === "dashboard" && <>
@@ -600,7 +717,7 @@ export default function Home() {
         <footer>校園訓育系統 · 前端介面示範 <span>所有學生及紀錄均為虛構資料</span></footer>
       </main>
     </div>
-    {selected && <div className="overlay" onMouseDown={(e) => { if (e.target === e.currentTarget) setStudentId(null); }}><section className="panel" role="dialog" aria-modal="true" aria-labelledby="student-title"><div className="panel-head"><div><small>STUDENT PROFILE</small><h2 id="student-title">學生資料</h2></div><button type="button" aria-label="關閉學生資料" onClick={() => setStudentId(null)}><X size={20}/></button></div><div className="panel-body"><div className="profile"><Avatar student={selected} large/><div><h3>{selected.name}</h3><p>{selected.className} · 座號 {selected.seat}</p></div></div><div className="profile-facts"><div><span>學號</span><strong>{selected.number}</strong></div><div><span>班級</span><strong>{selected.className}</strong></div><div><span>紀錄總數</span><strong>{selectedEntries.length} 筆</strong></div></div><h3 className="block-title">個人紀錄時間線 <span>{selectedTimeline.length} 項事件</span></h3><p className="timeline-intro">按日期查看紀錄、跟進與結案；紀錄總數指個案數目。</p><StudentTimeline events={selectedTimeline} onOpenCase={openCase}/></div><div className="panel-foot"><button type="button" className="btn primary wide" onClick={() => addEntry(selected.id)}><Plus size={17}/>為此學生新增紀錄</button></div></section></div>}
+    {selected && <div className="overlay" onMouseDown={(e) => { if (e.target === e.currentTarget) setStudentId(null); }}><section className="panel" role="dialog" aria-modal="true" aria-labelledby="student-title"><div className="panel-head"><div><small>STUDENT PROFILE</small><h2 id="student-title">學生資料</h2></div><button type="button" aria-label="關閉學生資料" onClick={() => setStudentId(null)}><X size={20}/></button></div><div className="panel-body"><div className="profile"><Avatar student={selected} large/><div><h3>{selected.name}</h3><p>{selected.className} · 座號 {selected.seat}</p></div></div><div className="profile-facts"><div><span>學號</span><strong>{selected.number}</strong></div><div><span>班級</span><strong>{selected.className}</strong></div><div><span>紀錄總數</span><strong>{selectedEntries.length} 筆</strong></div></div><StudentOverview entries={selectedEntries} today={today} onOpenCase={openCase}/><h3 className="block-title">個人紀錄時間線 <span>{selectedTimeline.length} 項事件</span></h3><p className="timeline-intro">按日期查看紀錄、跟進與結案；紀錄總數指個案數目。</p><StudentTimeline events={selectedTimeline} onOpenCase={openCase}/></div><div className="panel-foot"><button type="button" className="btn primary wide" onClick={() => addEntry(selected.id)}><Plus size={17}/>為此學生新增紀錄</button></div></section></div>}
     {formOpen && <div className="overlay" onMouseDown={(e) => { if (e.target === e.currentTarget) setFormOpen(false); }}><section className="panel" role="dialog" aria-modal="true" aria-labelledby="form-title"><div className="panel-head"><div><small>CONDUCT RECORD</small><h2 id="form-title">{editingId ? "編輯訓育紀錄" : "新增訓育紀錄"}</h2></div><button type="button" aria-label="關閉表單" onClick={() => setFormOpen(false)}><X size={20}/></button></div><form className="entry-form" onSubmit={saveEntry}><div className="panel-body"><p className="form-intro">記下學生的正向表現或需要跟進的事項，讓處理過程更清晰。</p><div className="field-row"><label className="field"><span>班別 *</span><select value={draftStudent.className} onChange={(e) => { const first = students.find((s) => s.className === e.target.value); if (first) setDraft({ ...draft, studentId: first.id }); }} required>{classes.slice(1).map((className) => <option key={className}>{className}</option>)}</select></label><label className="field"><span>學生姓名 *</span><select value={draft.studentId} onChange={(e) => setDraft({ ...draft, studentId: e.target.value })} required>{draftClassStudents.map((s) => <option value={s.id} key={s.id}>{s.name}</option>)}</select></label></div><label className="field"><span>學號</span><input value={draftStudent.number} readOnly aria-describedby="student-number-help"/><small id="student-number-help">由學生名冊自動帶入</small></label><div className="field-row"><label className="field"><span>紀錄類型 *</span><select value={draft.kind} onChange={(e) => { const kind = e.target.value as Kind; setDraft({ ...draft, kind, category: categories[kind][0] }); }}><option>嘉許</option><option>提醒</option><option>違規</option></select></label><label className="field"><span>日期 *</span><input type="date" value={draft.date} onChange={(e) => setDraft({ ...draft, date: e.target.value })} required/></label></div><label className="field"><span>事項分類 *</span><select value={draft.category} onChange={(e) => setDraft({ ...draft, category: e.target.value })}>{categories[draft.kind].map((c) => <option key={c}>{c}</option>)}</select></label><label className="field"><span>內容說明 *</span><textarea rows={5} maxLength={300} placeholder="簡述事件、已採取的行動或後續安排…" value={draft.note} onChange={(e) => setDraft({ ...draft, note: e.target.value })} required/><small>{draft.note.length}/300 字</small></label><p className="form-warning"><ShieldCheck size={16}/> 這是前端示範版。資料只會在目前頁面暫時顯示。</p></div><div className="panel-foot"><button type="button" className="btn secondary" onClick={() => setFormOpen(false)}>取消</button><button type="submit" className="btn primary"><Check size={17}/>{editingId ? "儲存變更" : "建立紀錄"}</button></div></form></section></div>}
     {batchFormOpen && <BatchRecordPanel
       step={batchStep}
@@ -632,6 +749,66 @@ export default function Home() {
     />}
     {selectedCase && caseStudent && <CasePanel key={selectedCase.id} entry={selectedCase} student={caseStudent} onClose={closeCaseView} onEdit={() => editEntry(selectedCase)} onSavePlan={saveCasePlan} onStart={startCase} onAddFollowUp={addFollowUp} onCloseCase={closeCase} onReopen={reopenCase}/>}
     {notice && <div className="toast" role="status"><CheckCircle2 size={18}/>{notice}{undoBatch && notice === `已建立 ${undoBatch.count} 筆批次紀錄` && <button type="button" className="toast-action" onClick={undoLastBatch}>復原</button>}<button type="button" aria-label="關閉通知" onClick={() => { setNotice(""); setUndoBatch(null); }}><X size={14}/></button></div>}
+  </div>;
+}
+
+type GlobalSearchProps = {
+  query: string;
+  open: boolean;
+  results: GlobalSearchResult[];
+  activeIndex: number;
+  inputRef: RefObject<HTMLInputElement | null>;
+  containerRef: RefObject<HTMLDivElement | null>;
+  onOpen: () => void;
+  onClose: () => void;
+  onQueryChange: (value: string) => void;
+  onActiveIndexChange: (index: number) => void;
+  onSelect: (result: GlobalSearchResult) => void;
+  onKeyDown: (event: ReactKeyboardEvent<HTMLInputElement>) => void;
+};
+
+function GlobalSearch({
+  query, open, results, activeIndex, inputRef, containerRef, onOpen, onClose, onQueryChange,
+  onActiveIndexChange, onSelect, onKeyDown,
+}: GlobalSearchProps) {
+  return <div className="global-search" ref={containerRef}>
+    <div className={"global-search-control" + (open ? " open" : "")}>
+      <Search size={16} aria-hidden="true" />
+      <input
+        ref={inputRef}
+        value={query}
+        placeholder="全域搜尋…"
+        aria-label="全域搜尋"
+        aria-expanded={open}
+        aria-controls="global-search-results"
+        role="combobox"
+        onFocus={onOpen}
+        onChange={(event) => onQueryChange(event.target.value)}
+        onKeyDown={onKeyDown}
+      />
+      {query ? <button type="button" className="global-search-clear" aria-label="清除全域搜尋" onClick={() => { onQueryChange(""); inputRef.current?.focus(); }}><X size={14}/></button> : <kbd>Ctrl K</kbd>}
+    </div>
+    {open && <div className="global-search-panel" id="global-search-results" role="listbox" aria-label="全域搜尋結果">
+      {!query && <div className="global-search-hint"><Sparkles size={18}/><strong>快速搜尋</strong><p>搜尋學生姓名、班別、學號、事項或內容。</p><span>按 <kbd>Ctrl K</kbd> 可隨時開啟</span></div>}
+      {query && results.length > 0 && <>
+        <div className="global-search-heading"><span>搜尋結果</span><small>顯示最相關的 {results.length} 項</small></div>
+        <div className="global-search-results">{results.map((result, index) => <button
+          type="button"
+          role="option"
+          aria-selected={index === activeIndex}
+          className={"global-search-result" + (index === activeIndex ? " active" : "")}
+          key={result.id}
+          onMouseEnter={() => onActiveIndexChange(index)}
+          onClick={() => onSelect(result)}
+        >
+          <span className={"global-search-result-icon " + result.type}>{result.type === "student" ? <UsersRound size={16}/> : <ClipboardList size={16}/>}</span>
+          <span className="global-search-result-copy"><strong>{result.title}</strong><small>{result.meta}</small><em>{result.description}</em></span>
+          <ChevronRight size={15} className="global-search-result-arrow" />
+        </button>)}</div>
+      </>}
+      {query && !results.length && <div className="global-search-empty"><Search size={20}/><strong>找不到相符內容</strong><p>請試試學生姓名、學號、事項分類或內容關鍵字。</p></div>}
+      {query && <div className="global-search-footer"><span><kbd>↑</kbd><kbd>↓</kbd> 選擇</span><span><kbd>Enter</kbd> 開啟</span><button type="button" onClick={onClose}>關閉</button></div>}
+    </div>}
   </div>;
 }
 
@@ -974,6 +1151,38 @@ function TodoCenter({ todos, studentMap, today, scope, filter, search, sort, cla
 function TodoMetric({ label, hint, value, Icon, tone, active, onClick }: { label: string; hint: string; value: number; Icon: typeof Clock3; tone: string; active: boolean; onClick: () => void }) {
   return <button type="button" className={"todo-metric " + tone + (active ? " active" : "")} aria-pressed={active} onClick={onClick}><span className="todo-metric-icon"><Icon size={20}/></span><span><small>{label}</small><strong>{String(value).padStart(2, "0")}</strong><em>{hint}</em></span><ChevronRight size={17}/></button>;
 }
+function StudentOverview({ entries, today, onOpenCase }: { entries: Entry[]; today: string; onOpenCase: (id: string) => void }) {
+  const [period, setPeriod] = useState("all");
+  const start = addDays(today, -29);
+  const scoped = entries.filter((entry) => period === "all" || (entry.date >= start && entry.date <= today));
+  const open = entries.filter((entry) => entry.status !== "已結案").sort((a, b) =>
+    (a.dueDate || "9999").localeCompare(b.dueDate || "9999") || a.date.localeCompare(b.date) || a.id.localeCompare(b.id));
+  const overdue = open.filter((entry) => entry.dueDate && entry.dueDate < today).length;
+  const dueToday = open.filter((entry) => entry.dueDate === today).length;
+  const unscheduled = open.filter((entry) => !entry.dueDate).length;
+  const closed = scoped.filter((entry) => entry.status === "已結案").length;
+  const latest = buildStudentTimeline(entries)[0];
+  const counts = (["嘉許", "提醒", "違規"] as Kind[]).map((kind) => ({ kind, count: scoped.filter((entry) => entry.kind === kind).length }));
+  return <section className="student-overview" aria-labelledby="student-overview-title">
+    <div className="overview-heading"><h3 id="student-overview-title"><BookOpenCheck size={17}/>學生概況摘要</h3><label><span className="sr-only">摘要紀錄期間</span><select value={period} onChange={(event) => setPeriod(event.target.value)}><option value="all">全部紀錄</option><option value="30">近 30 日</option></select></label></div>
+    <p className="overview-period">{period === "all" ? "全部已登記紀錄" : `${dateLabel(start)} — ${dateLabel(today)} · 按事件日期`}</p>
+    <div className="overview-counts">{counts.map(({ kind, count }) => <div key={kind}><KindTag kind={kind}/><strong>{count}<small> 筆</small></strong></div>)}</div>
+    <p className="overview-description" aria-live="polite">{!entries.length ? "尚未登記任何紀錄，暫無足夠資料整理學生概況。" : !scoped.length ? "此期間沒有新增紀錄，可切換「全部紀錄」查看其他日期的資料。" : `此期間共有 ${scoped.length} 筆紀錄，其中 ${closed} 筆目前已結案、${scoped.length - closed} 筆仍需跟進。`}</p>
+    <div className="overview-followup-heading"><h4>目前跟進事項</h4><span>所有日期 · {open.length} 項未結案</span></div>
+    {open.length > 0 ? <>
+      <div className="overview-alerts"><span className={overdue ? "is-overdue" : ""}>逾期 {overdue}</span><span>今日到期 {dueToday}</span><span>未設期限 {unscheduled}</span></div>
+      <div className="overview-cases">{open.map((entry) => {
+        const due = todoDueMeta(entry, today);
+        return <button type="button" key={entry.id} onClick={() => onOpenCase(entry.id)} aria-label={`查看${entry.category}個案`}>
+          <span><strong>{entry.category}</strong><small>{entry.assignee || "未指定負責人"} · {entry.status}</small><small className={due.tone === "overdue" ? "is-overdue" : ""}>{due.label}{entry.dueDate ? ` · ${dateLabel(entry.dueDate)}` : ""}</small></span><ChevronRight size={16}/>
+        </button>;
+      })}</div>
+    </> : <p className="overview-clear"><CheckCircle2 size={16}/>{entries.length ? "目前沒有未結案事項。" : "尚無跟進事項。"}</p>}
+    {latest && <button type="button" className="overview-latest" onClick={() => onOpenCase(latest.caseId)}><span><small>最近活動 · {dateLabel(latest.date)}</small><strong>{latest.category} · {latest.type === "record" ? "新增紀錄" : latest.type === "closed" ? "結案" : latest.type === "reopened" ? "重新開啟" : "跟進"}</strong><span>{latest.detail}</span></span><ChevronRight size={16}/></button>}
+    <p className="overview-note">摘要按已登記紀錄整理，不代表學生的整體表現。修改紀錄或跟進狀態後會同步更新。</p>
+  </section>;
+}
+
 function StudentTimeline({ events, onOpenCase }: { events: TimelineEvent[]; onOpenCase: (id: string) => void }) {
   if (!events.length) return <p className="timeline-empty">目前沒有訓育紀錄或跟進事件。</p>;
   return <ol className="student-timeline">
