@@ -657,8 +657,8 @@ export default function Home() {
       <main className="content">
         <div className="page-heading">
           <div><small>STUDENT AFFAIRS / 訓育管理</small><h1>{title}</h1><p>{subtitle}</p></div>
-          {page !== "records" && <div className="page-actions">
-            {page === "dashboard" && <button ref={batchButtonRef} type="button" className="btn secondary" onClick={openBatchForm}><UsersRound size={17}/>批次建立</button>}
+          {page === "dashboard" && <div className="page-actions">
+            <button ref={batchButtonRef} type="button" className="btn secondary" onClick={openBatchForm}><UsersRound size={17}/>批次建立</button>
             <button type="button" className="btn primary" onClick={() => addEntry()}><Plus size={17}/>新增紀錄</button>
           </div>}
         </div>
