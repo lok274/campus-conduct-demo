@@ -655,7 +655,13 @@ export default function Home() {
         onKeyDown={handleGlobalSearchKeyDown}
       /><div className="top-meta"><span><CalendarDays size={15}/> 2026–27 學年</span><b><i/> 示範版</b></div></header>
       <main className="content">
-        <div className="page-heading"><div><small>STUDENT AFFAIRS / 訓育管理</small><h1>{title}</h1><p>{subtitle}</p></div><div className="page-actions">{page === "records" && <button ref={batchButtonRef} type="button" className="btn secondary" onClick={openBatchForm}><UsersRound size={17}/>批次建立</button>}<button type="button" className="btn primary" onClick={() => addEntry()}><Plus size={17}/>新增紀錄</button></div></div>
+        <div className="page-heading">
+          <div><small>STUDENT AFFAIRS / 訓育管理</small><h1>{title}</h1><p>{subtitle}</p></div>
+          {page !== "records" && <div className="page-actions">
+            {page === "dashboard" && <button ref={batchButtonRef} type="button" className="btn secondary" onClick={openBatchForm}><UsersRound size={17}/>批次建立</button>}
+            <button type="button" className="btn primary" onClick={() => addEntry()}><Plus size={17}/>新增紀錄</button>
+          </div>}
+        </div>
         {page === "dashboard" && <>
           <section className="hero"><div className="hero-copy"><span><Sparkles size={15}/> 2026–27 學年 · 訓育概況</span><h2>讓每一份關注，<br/><em>都有清楚的紀錄。</em></h2><p>從嘉許到跟進事項，在同一處掌握學生的校園成長。</p><button type="button" onClick={() => navigate("records")}>查看所有紀錄 <ArrowRight size={16}/></button></div><div className="hero-art" aria-hidden="true"><div className="orbit"/><div className="paper behind"/><div className="paper front"><ShieldCheck size={28}/><i/><i/><i/></div><span>✦</span></div></section>
           <div className="stats">
