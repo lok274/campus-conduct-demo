@@ -25,7 +25,9 @@ export function getScoreOptions(rule: ConductRule): number[] {
   const scale = 10 ** precision;
   const min = Math.round(rule.minScore * scale);
   const max = Math.round(rule.maxScore * scale);
-  return Array.from({ length: max - min + 1 }, (_, index) => (min + index) / scale);
+  const options = Array.from({ length: max - min + 1 }, (_, index) => (min + index) / scale);
+  // Show deductions from the smallest to the largest amount deducted.
+  return rule.maxScore <= 0 ? options.reverse() : options;
 }
 
 export function selectRuleInput(rule: ConductRule, previous?: RuleInput): RuleInput {
