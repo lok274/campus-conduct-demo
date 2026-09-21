@@ -10,8 +10,6 @@ export function RuleDetails({ rule, scoreChange, showSelectedScore = true }: { r
       <div><dt>Code</dt><dd>{rule.code}</dd></div>
       <div><dt>校本範疇</dt><dd>{rule.category}</dd></div>
       <div><dt>分類</dt><dd>{rule.subCategory}</dd></div>
-      <div><dt>預設分數</dt><dd>{scoreLabel(rule.score)} 分</dd></div>
-      <div><dt>分數範圍</dt><dd>{rule.minScore === rule.maxScore ? `${scoreLabel(rule.minScore)} 分（固定）` : `${scoreLabel(rule.minScore)} 至 ${scoreLabel(rule.maxScore)} 分`}</dd></div>
       {showSelectedScore && <div className="rule-selected-score"><dt>本次加減分數</dt><dd>{scoreActionLabel(scoreChange ?? rule.score)}（{scoreLabel(scoreChange ?? rule.score)}）</dd></div>}
     </dl>
     <p>本次加減分數會隨紀錄保留，尚未計入學生總分。</p>
