@@ -359,10 +359,6 @@ body{font-size:1rem;line-height:1.5}
 .global-search-panel{max-height:80vh;overflow-y:auto}
 .global-search-result{min-height:84px}
 .global-search-control input{font-size:.875rem}
-.batch-select-all{width:100%;margin:0 0 12px}
-.batch-selection-confirm{padding:16px;margin-bottom:16px;border:2px solid #0c7774;border-radius:10px;background:#eef8f5}
-.batch-selection-confirm p{font-size:.875rem;color:#355d54;line-height:1.7}
-.batch-selection-confirm>div{display:flex;gap:10px;flex-wrap:wrap}
 .batch-picker-head{flex-wrap:wrap}
 .batch-picker-head>div:last-child{flex-wrap:wrap}
 .batch-picker-head button{min-height:40px}

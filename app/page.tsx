@@ -184,7 +184,6 @@ function Workspace({ students, initialEntries, largeFixture }: { students: Stude
   const [batchSearch, setBatchSearch] = useState("");
   const [batchSkipDuplicates, setBatchSkipDuplicates] = useState(true);
   const [batchError, setBatchError] = useState("");
-  const [batchSelectAllPending, setBatchSelectAllPending] = useState(false);
   const [undoBatch, setUndoBatch] = useState<{ id: string; count: number } | null>(null);
   const [notice, setNotice] = useState("");
   const [today, setToday] = useState(currentLocalDate);
@@ -485,7 +484,7 @@ function Workspace({ students, initialEntries, largeFixture }: { students: Stude
   function openBatchForm() {
     setFormReturnCaseId(null);
     setBatchDraft(newBatchDraft()); setBatchStudentIds([]); setBatchClassFilter("全部班級"); setBatchSearch("");
-    setBatchSkipDuplicates(true); setBatchError(""); setBatchSelectAllPending(false); setBatchStep("students");
+    setBatchSkipDuplicates(true); setBatchError(""); setBatchStep("students");
     setStudentId(null); setCaseId(null); setCaseReturnStudentId(null); setFormOpen(false); setBatchFormOpen(true);
   }
   function closeBatchForm(skipConfirmation = false) {
@@ -500,14 +499,6 @@ function Workspace({ students, initialEntries, largeFixture }: { students: Stude
   function toggleVisibleBatchStudents() {
     setBatchStudentIds(current => toggleSelection(current, batchPage.items));
     setBatchError("");
-  }
-  function selectAllMatchingBatchStudents() {
-    if (!batchVisibleStudents.length) return;
-    setBatchSelectAllPending(true);
-  }
-  function confirmAllMatchingBatchStudents() {
-    setBatchStudentIds(current => [...new Set([...current, ...batchVisibleStudents.map(student => student.id)])]);
-    setBatchSelectAllPending(false); setBatchError("");
   }
   function goToBatchDetails() {
     if (!batchSelectedStudents.length) { setBatchError("請至少選擇 1 位學生。"); return; }
@@ -829,11 +820,6 @@ function Workspace({ students, initialEntries, largeFixture }: { students: Stude
       draft={batchDraft}
       visibleStudents={batchPage.items}
       pagination={batchPage}
-      onSelectAllMatching={selectAllMatchingBatchStudents}
-      selectAllPending={batchSelectAllPending}
-      combinedCount={new Set([...batchStudentIds, ...batchVisibleStudents.map(student => student.id)]).size}
-      onConfirmAllMatching={confirmAllMatchingBatchStudents}
-      onCancelAllMatching={() => setBatchSelectAllPending(false)}
       selectedStudents={batchSelectedStudents}
       selectedIds={batchSelectedIdSet}
       duplicateIds={new Set(batchSelectedStudents.filter(student => batchDuplicateStudentIds.has(student.id)).map(student => student.id))}
@@ -847,8 +833,8 @@ function Workspace({ students, initialEntries, largeFixture }: { students: Stude
       today={today}
       onClose={() => closeBatchForm()}
       onStepChange={(next) => { setBatchError(""); setBatchStep(next); }}
-      onClassFilterChange={value => { setBatchClassFilter(value); setBatchSelectAllPending(false); }}
-      onSearch={value => { setBatchSearch(value); setBatchSelectAllPending(false); }}
+      onClassFilterChange={setBatchClassFilter}
+      onSearch={setBatchSearch}
       onToggleStudent={toggleBatchStudent}
       onToggleVisible={toggleVisibleBatchStudents}
       onClearSelection={() => { setBatchStudentIds([]); setBatchError(""); }}
@@ -936,11 +922,6 @@ type BatchRecordPanelProps = {
   draft: BatchDraft;
   visibleStudents: Student[];
   pagination: ListPage;
-  onSelectAllMatching: () => void;
-  selectAllPending: boolean;
-  combinedCount: number;
-  onConfirmAllMatching: () => void;
-  onCancelAllMatching: () => void;
   selectedStudents: Student[];
   selectedIds: Set<string>;
   duplicateIds: Set<string>;
@@ -967,7 +948,7 @@ type BatchRecordPanelProps = {
 };
 
 function BatchRecordPanel({
-  step, draft, visibleStudents, selectedStudents, selectedIds, duplicateIds, allVisibleSelected, pagination, onSelectAllMatching, selectAllPending, combinedCount, onConfirmAllMatching, onCancelAllMatching,
+  step, draft, visibleStudents, selectedStudents, selectedIds, duplicateIds, allVisibleSelected, pagination,
   classFilter, search, classes, skipDuplicates, createCount, error, today, onClose, onStepChange,
   onClassFilterChange, onSearch, onToggleStudent, onToggleVisible, onClearSelection, onDraftChange,
   onSkipDuplicatesChange, onNextStudents, onSubmitDetails, onConfirm,
@@ -1009,12 +990,6 @@ function BatchRecordPanel({
             <label className="batch-search"><Search size={16}/><input autoFocus aria-label="搜尋批次學生" placeholder="搜尋姓名、學號或座號" value={search} onChange={(event) => onSearch(event.target.value)}/></label>
           </div>
           <div className="batch-picker-head"><div><strong>學生名單</strong><span aria-live="polite">目前顯示 {visibleStudents.length} 位</span></div><div><button type="button" onClick={onToggleVisible} disabled={!visibleStudents.length}>{allVisibleSelected ? "取消本頁選取" : "全選本頁"}</button><button type="button" onClick={onClearSelection} disabled={!selectedStudents.length}>清除已選</button></div></div>
-          <button type="button" className="batch-select-all btn secondary" disabled={!pagination.total} onClick={onSelectAllMatching}>選取全部符合條件的 {pagination.total} 位</button>
-          {selectAllPending && <section className="batch-selection-confirm" role="alert" aria-label="確認全部選取">
-            <strong>將選取全部符合條件的 {pagination.total} 位（不限本頁）</strong>
-            <p>保留原有選擇，確認後共 {combinedCount} 位學生。此步只選取名單，尚未建立紀錄。</p>
-            <div><button type="button" className="btn secondary" onClick={onCancelAllMatching}>取消全選</button><button type="button" className="btn primary" onClick={onConfirmAllMatching}>確認選取 {pagination.total} 位</button></div>
-          </section>}
           <div className="batch-student-list" aria-label="可選學生">
             {visibleStudents.map((student) => <label key={student.id} className={"batch-student-row" + (selectedIds.has(student.id) ? " selected" : "")}>
               <input type="checkbox" checked={selectedIds.has(student.id)} onChange={() => onToggleStudent(student.id)}/>

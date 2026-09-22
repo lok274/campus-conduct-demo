@@ -42,7 +42,8 @@ test("cross-page/class selection does not erase previous selections", () => {
   assert.equal(ids.length,75);
   ids=toggleSelection(ids,students.slice(25,50));
   assert.equal(ids.length,50); assert.ok(ids.includes("test-s1")); assert.ok(ids.includes("test-s165"));
-  assert.equal(new Set([...ids,...students.map(s=>s.id)]).size,840);
+  assert.ok(!ids.includes("test-s26"));
+  assert.ok(!ids.includes("test-s840"));
 });
 test("duplicate detection checks whole dataset, preserves zero and rule scope", () => {
   const expected={date:"2026-09-22",kind:"守規",category:"測試事項",note:"相同  內容",scoreChange:0,rule:{code:"1",category:"守規"}};
