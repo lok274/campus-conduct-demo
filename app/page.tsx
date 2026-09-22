@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent as ReactKeyboardEvent, type RefObject } from "react";
-import { ArrowRight, ArrowUpDown, BookOpenCheck, CalendarDays, Check, CheckCircle2, ChevronDown, ChevronRight, ClipboardList, Clock3, FilePenLine, Filter, HeartHandshake, LayoutDashboard, Menu, Plus, RotateCcw, Search, ShieldCheck, SlidersHorizontal, Sparkles, UsersRound, X } from "lucide-react";
+import { ArrowRight, ArrowUpDown, BookOpenCheck, CalendarDays, Check, CheckCircle2, ChevronDown, ChevronRight, ClipboardList, Clock3, FilePenLine, Filter, LayoutDashboard, Menu, Plus, RotateCcw, Search, ShieldCheck, SlidersHorizontal, Sparkles, UsersRound, X } from "lucide-react";
 import { SCHOOL_BASE_SCORES, SCHOOL_CATEGORIES, type SchoolCategory } from "../lib/school-rules";
 import { resolveRuleSelection, ruleRecordFields, ruleSearchText, type ConductRule, type RuleInput } from "../lib/conduct-rules";
 import { RuleDetails, RulePicker } from "../components/rule-picker";
@@ -239,7 +239,6 @@ export default function Home() {
   const studentMap = useMemo(() => new Map(students.map((s) => [s.id, s])), []);
   const next7Date = addDays(today, 7);
   const pending = entries.filter((e) => e.status !== "已結案");
-  const praise = entries.filter((e) => e.kind === "嘉許");
   const closed = entries.filter((e) => e.status === "已結案");
   const overdueTodos = pending.filter((e) => e.dueDate && e.dueDate < today);
   const todayTodos = pending.filter((e) => e.dueDate === today);
@@ -664,12 +663,6 @@ export default function Home() {
         </div>
         {page === "dashboard" && <>
           <section className="hero"><div className="hero-copy"><span><Sparkles size={15}/> 2026–27 學年 · 訓育概況</span><h2>讓每一份關注，<br/><em>都有清楚的紀錄。</em></h2><p>從嘉許到跟進事項，在同一處掌握學生的校園成長。</p><button type="button" onClick={() => navigate("records")}>查看所有紀錄 <ArrowRight size={16}/></button></div><div className="hero-art" aria-hidden="true"><div className="orbit"/><div className="paper behind"/><div className="paper front"><ShieldCheck size={28}/><i/><i/><i/></div><span>✦</span></div></section>
-          <div className="stats">
-            <Stat icon={UsersRound} color="mint" value={students.length} label="學生人數" hint="示範名冊"/>
-            <Stat icon={Clock3} color="gold" value={pending.length} label="待跟進事項" hint="優先處理"/>
-            <Stat icon={HeartHandshake} color="blue" value={praise.length} label="嘉許紀錄" hint="本期累計"/>
-            <Stat icon={CheckCircle2} color="rose" value={closed.length} label="已結案事項" hint="本期累計"/>
-          </div>
           <div className="dashboard-grid"><section className="card list-card"><div className="card-heading"><div><small>最新動態</small><h2>近期訓育紀錄</h2></div><button type="button" onClick={() => navigate("records")}>查看全部 <ArrowRight size={15}/></button></div>{[...entries].sort((a,b) => b.date.localeCompare(a.date)).slice(0,4).map((e) => { const s = studentMap.get(e.studentId)!; return <div className="activity" key={e.id}><Avatar student={s}/><div><strong>{s.name} <span>· {s.className}</span></strong><p>{e.category} · {e.note}</p></div><section><KindTag kind={e.kind}/><small>{dateLabel(e.date)}</small></section></div>; })}</section>
           <section className="card follow-card"><div className="card-heading"><div><small>待辦清單</small><h2>需要跟進</h2></div><b>{pending.length} 項</b></div>{pending.length ? pending.map((e) => { const s = studentMap.get(e.studentId)!; return <div className="follow" key={e.id}><span className={e.kind === "違規" ? "warn red" : "warn"}><Clock3 size={17}/></span><div><strong>{s.name} <span>· {s.className}</span></strong><p>{e.category}</p></div><button type="button" aria-label={"查看" + s.name + "的個案詳情"} onClick={() => openCase(e.id)}><ChevronRight size={18}/></button></div>; }) : <p className="empty-inline">目前沒有待跟進事項。</p>}<button type="button" className="follow-all" onClick={() => navigate("todos")}>前往待辦中心 <ArrowRight size={15}/></button></section></div>
         </>}
@@ -1364,8 +1357,5 @@ function CasePanel({ entry, student, onClose, onEdit, onSavePlan, onStart, onAdd
       {!isClosed && entry.status === "待跟進" && <div className="panel-foot"><button type="button" className="btn secondary" onClick={() => onStart(entry.id)}>開始跟進</button></div>}
     </section>
   </div>;
-}
-function Stat({ icon: Icon, color, value, label, hint }: { icon: typeof UsersRound; color: string; value: number; label: string; hint: string }) {
-  return <section className="stat"><div className="stat-top"><span className={"stat-icon " + color}><Icon size={20}/></span><small>{hint}</small></div><strong>{String(value).padStart(2, "0")}</strong><p>{label}</p></section>;
 }
 function Empty({ text, hint, onReset }: { text: string; hint: string; onReset?: () => void }) { return <div className="empty"><Search size={23}/><strong>{text}</strong><p>{hint}</p>{onReset && <button type="button" className="btn secondary" onClick={onReset}><RotateCcw size={14}/>清除條件</button>}</div>; }
