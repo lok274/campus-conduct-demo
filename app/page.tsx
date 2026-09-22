@@ -2,33 +2,26 @@
 
 import { useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent as ReactKeyboardEvent, type RefObject } from "react";
 import { ArrowRight, ArrowUpDown, BookOpenCheck, CalendarDays, Check, CheckCircle2, ChevronDown, ChevronRight, ClipboardList, Clock3, FilePenLine, Filter, LayoutDashboard, Menu, Plus, RotateCcw, Search, ShieldCheck, SlidersHorizontal, Sparkles, UsersRound, X } from "lucide-react";
-import { SCHOOL_BASE_SCORES, SCHOOL_CATEGORIES, type SchoolCategory } from "../lib/school-rules";
-import { resolveRuleSelection, ruleRecordFields, ruleSearchText, type ConductRule, type RuleInput } from "../lib/conduct-rules";
+import { SCHOOL_BASE_SCORES, SCHOOL_CATEGORIES } from "../lib/school-rules";
+import { resolveRuleSelection, ruleRecordFields, type RuleInput } from "../lib/conduct-rules";
 import { RuleDetails, RulePicker } from "../components/rule-picker";
-import { completeCase, DIRECT_CLOSURE_REASON, type CaseClosure, type CaseStatus } from "../lib/case-workflow";
+import { completeCase, DIRECT_CLOSURE_REASON } from "../lib/case-workflow";
+import type { Student, Entry, FollowUp, Kind, LegacyKind, Status } from "../lib/conduct-types";
+import { compareTodoPriority, duplicateStudentIds, matchesStudent, normalizeSearch, recordSearchText, scoreLabel, studentSearchRank, toggleSelection } from "../lib/list-tools";
+import { ListPagination, useListPage, type ListPage } from "../components/list-pagination";
+import { StudentPicker, StudentSearch } from "../components/student-picker";
 
 type Page = "dashboard" | "todos" | "students" | "records";
-type LegacyKind = "嘉許" | "提醒" | "違規";
-type Kind = LegacyKind | SchoolCategory;
-type Status = CaseStatus;
 type TodoScope = "open" | "completed";
 type TodoFilter = "all" | "overdue" | "today" | "next7" | "unscheduled";
 type TodoSort = "priority" | "updated-desc" | "student-asc" | "class-asc";
 type StudentFollowUpFilter = "全部跟進" | "有待跟進" | "有逾期待辦" | "沒有待跟進";
 type StudentSort = "class-asc" | "name-asc" | "records-desc" | "pending-desc" | "latest-desc";
 type RecordSort = "date-desc" | "date-asc" | "updated-desc" | "student-asc" | "status-priority";
-type Student = { id: string; name: string; className: string; seat: string; number: string };
-type FollowUp = { id: string; date: string; at?: string; author: string; note: string; type?: "follow-up" | "reopened" };
-type Closure = CaseClosure;
 type TimelineEvent = {
   id: string; caseId: string; date: string; at?: string; order: number;
   type: "record" | "follow-up" | "closed" | "reopened";
   kind: Kind; category: string; detail: string; status: Status; author?: string;
-};
-type Entry = {
-  id: string; studentId: string; kind: Kind; category: string; date: string; note: string; status: Status;
-  rule?: ConductRule; scoreChange?: number; closedWithoutFollowUp?: boolean;
-  batchId?: string; assignee?: string; dueDate?: string; followUps?: FollowUp[]; resolution?: string; closedAt?: string; closureHistory?: Closure[];
 };
 type Draft = Pick<Entry, "studentId" | "kind" | "category" | "date" | "note" | "status"> & RuleInput & { needsFollowUp: boolean };
 type BatchDraft = Pick<Entry, "kind" | "category" | "date" | "note"> & RuleInput & { needsFollowUp: boolean; assignee: string; dueDate: string };
@@ -72,14 +65,13 @@ const categories: Record<LegacyKind, string[]> = {
 };
 const currentLocalDate = () => new Date().toLocaleDateString("sv-SE");
 const newDraft = (): Draft => ({
-  studentId: students[0].id, kind: "嘉許", category: "服務精神",
+  studentId: "", kind: "嘉許", category: "服務精神",
   date: currentLocalDate(), note: "", status: "待跟進", needsFollowUp: true, code: "", schoolCategory: "", subCategory: "",
 });
 const newBatchDraft = (): BatchDraft => ({
   kind: "嘉許", category: "服務精神", date: currentLocalDate(), note: "", needsFollowUp: false, assignee: "", dueDate: "", code: "", schoolCategory: "", subCategory: "",
 });
 const dateLabel = (date: string) => date.replaceAll("-", "/");
-const normalizeRecordNote = (note: string) => note.trim().replace(/\s+/g, " ");
 const assigneeOptionLabel = (value: string) => value === ALL_ASSIGNEES ? "全部負責人" : value === UNASSIGNED ? "未指定" : value;
 const latestActivityDate = (entry: Entry) => {
   const dates = [entry.date, entry.closedAt, ...(entry.followUps ?? []).map((item) => item.date), ...(entry.closureHistory ?? []).map((item) => item.date)].filter(Boolean) as string[];
@@ -121,14 +113,32 @@ const nav: { id: Page; text: string; Icon: typeof LayoutDashboard }[] = [
 ];
 
 function Avatar({ student, large = false }: { student: Student; large?: boolean }) {
-  const color = ["mint", "blue", "rose", "gold"][students.findIndex((s) => s.id === student.id) % 4];
+  const color = ["mint", "blue", "rose", "gold"][Number(student.seat) % 4];
   return <span className={"avatar " + color + (large ? " large" : "")}>{student.name.slice(-2)}</span>;
 }
 function KindTag({ kind }: { kind: Kind }) { return <span className={"kind-tag kind-" + kind}>{kind}</span>; }
 function StatusTag({ status }: { status: Status }) { return <span className={"status-tag " + (status === "待跟進" ? "waiting" : status === "跟進中" ? "progress" : "done")}><i />{status}</span>; }
 
 export default function Home() {
+  const [fixture, setFixture] = useState<{ students: Student[]; entries: Entry[] } | null>(null);
+  useEffect(() => {
+    if (process.env.NODE_ENV !== "development" || new URLSearchParams(window.location.search).get("fixture") !== "large") return;
+    const previousFontSize = document.documentElement.style.fontSize;
+    if (new URLSearchParams(window.location.search).get("textScale") === "200") document.documentElement.style.fontSize = "200%";
+    let active = true;
+    void import("../tests/fixtures/large-school").then(({ createLargeSchool }) => {
+      if (active) setFixture(createLargeSchool());
+    });
+    return () => { active = false; document.documentElement.style.fontSize = previousFontSize; };
+  }, []);
+  return <Workspace key={fixture ? "large" : "demo"} students={fixture?.students ?? students} initialEntries={fixture?.entries ?? initialEntries} largeFixture={!!fixture}/>;
+}
+
+function Workspace({ students, initialEntries, largeFixture }: { students: Student[]; initialEntries: Entry[]; largeFixture: boolean }) {
   const [page, setPage] = useState<Page>("dashboard");
+  const [lookupQuery, setLookupQuery] = useState("");
+  const [lookupClass, setLookupClass] = useState("全部班級");
+  const lookupInputRef = useRef<HTMLInputElement>(null);
   const [entries, setEntries] = useState<Entry[]>(initialEntries);
   const [studentSearch, setStudentSearch] = useState("");
   const [studentClassFilter, setStudentClassFilter] = useState("全部班級");
@@ -174,6 +184,7 @@ export default function Home() {
   const [batchSearch, setBatchSearch] = useState("");
   const [batchSkipDuplicates, setBatchSkipDuplicates] = useState(true);
   const [batchError, setBatchError] = useState("");
+  const [batchSelectAllPending, setBatchSelectAllPending] = useState(false);
   const [undoBatch, setUndoBatch] = useState<{ id: string; count: number } | null>(null);
   const [notice, setNotice] = useState("");
   const [today, setToday] = useState(currentLocalDate);
@@ -221,8 +232,9 @@ export default function Home() {
     const openWithShortcut = (event: KeyboardEvent) => {
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
         event.preventDefault();
-        setGlobalSearchOpen(true);
-        window.setTimeout(() => globalSearchInputRef.current?.focus(), 0);
+        if (formOpen || batchFormOpen || studentId || caseId) return;
+        if (page === "dashboard") lookupInputRef.current?.focus();
+        else { setGlobalSearchOpen(true); globalSearchInputRef.current?.focus(); }
       }
     };
     const closeWhenOutside = (event: PointerEvent) => {
@@ -234,9 +246,32 @@ export default function Home() {
       window.removeEventListener("keydown", openWithShortcut);
       window.removeEventListener("pointerdown", closeWhenOutside);
     };
-  }, []);
+  }, [page, formOpen, batchFormOpen, studentId, caseId]);
 
-  const studentMap = useMemo(() => new Map(students.map((s) => [s.id, s])), []);
+  const modalOpen = formOpen || batchFormOpen || !!studentId || !!caseId;
+  useEffect(() => {
+    if (!modalOpen) return;
+    const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const oldOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const trap = (event: KeyboardEvent) => {
+      if (event.key !== "Tab") return;
+      const dialog = document.querySelector<HTMLElement>('.overlay [role="dialog"]');
+      const items = Array.from(dialog?.querySelectorAll<HTMLElement>('button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex="0"]') ?? []).filter(item => item.getClientRects().length);
+      const first = items[0], last = items.at(-1);
+      if (!first || !last) return;
+      if (!dialog?.contains(document.activeElement) || (!event.shiftKey && document.activeElement === last)) { event.preventDefault(); first.focus(); }
+      else if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+    };
+    document.addEventListener("keydown", trap);
+    return () => { document.body.style.overflow = oldOverflow; document.removeEventListener("keydown", trap); if (opener?.isConnected) opener.focus({ preventScroll: true }); };
+  }, [modalOpen]);
+  useEffect(() => {
+    if (!modalOpen) return;
+    document.querySelector<HTMLElement>('.overlay [role="dialog"] button')?.focus({ preventScroll: true });
+  }, [modalOpen, formOpen, batchFormOpen, studentId, caseId]);
+
+  const studentMap = useMemo(() => new Map(students.map((s) => [s.id, s])), [students]);
   const next7Date = addDays(today, 7);
   const pending = entries.filter((e) => e.status !== "已結案");
   const closed = entries.filter((e) => e.status === "已結案");
@@ -244,7 +279,7 @@ export default function Home() {
   const todayTodos = pending.filter((e) => e.dueDate === today);
   const unscheduledTodos = pending.filter((e) => !e.dueDate);
   const classes = ["全部班級", ...new Set(students.map((s) => s.className))];
-  const classOrder = useMemo(() => new Map([...new Set(students.map((student) => student.className))].map((className, index) => [className, index])), []);
+  const classOrder = useMemo(() => new Map([...new Set(students.map((student) => student.className))].map((className, index) => [className, index])), [students]);
   const assignees = [ALL_ASSIGNEES, UNASSIGNED, ...new Set(entries.map((entry) => entry.assignee?.trim()).filter((value): value is string => Boolean(value) && value !== ALL_ASSIGNEES && value !== UNASSIGNED))];
   const recordCategories = ["全部事項", ...new Set(entries.map((entry) => entry.category))];
   const studentStats = useMemo(() => {
@@ -259,13 +294,13 @@ export default function Home() {
       if (latest > item.latest) item.latest = latest;
     }
     return stats;
-  }, [entries, today]);
+  }, [entries, today, students]);
   const compareStudentClass = (a: Student, b: Student) =>
     (classOrder.get(a.className) ?? 999) - (classOrder.get(b.className) ?? 999) || Number(a.seat) - Number(b.seat) || a.name.localeCompare(b.name, "zh-Hant");
-  const studentQuery = studentSearch.toLocaleLowerCase("zh-Hant").trim();
+  const studentQuery = normalizeSearch(studentSearch);
   const shownStudents = students.filter((student) => {
     const stats = studentStats.get(student.id)!;
-    const matchesSearch = (student.name + student.className + student.number).toLocaleLowerCase("zh-Hant").includes(studentQuery);
+    const matchesSearch = matchesStudent(student, studentQuery);
     const matchesClass = studentClassFilter === "全部班級" || student.className === studentClassFilter;
     const matchesFollowUp = studentFollowUpFilter === "全部跟進" ||
       (studentFollowUpFilter === "有待跟進" && stats.pending > 0) ||
@@ -281,11 +316,11 @@ export default function Home() {
     if (studentSort === "latest-desc") return bStats.latest.localeCompare(aStats.latest) || compareStudentClass(a, b);
     return compareStudentClass(a, b);
   });
-  const recordQuery = recordSearch.toLocaleLowerCase("zh-Hant").trim();
+  const recordQuery = normalizeSearch(recordSearch);
   const recordDateRangeInvalid = Boolean(recordDateFrom && recordDateTo && recordDateFrom > recordDateTo);
   const shownEntries = entries.filter((e) => {
     const student = studentMap.get(e.studentId);
-    const searchable = ((student?.name ?? "") + (student?.className ?? "") + (student?.number ?? "") + e.category + e.note + (e.assignee ?? "") + ruleSearchText(e.rule)).toLocaleLowerCase("zh-Hant");
+    const searchable = recordSearchText(e, student);
     const matchesAssignee = recordAssigneeFilter === ALL_ASSIGNEES || (recordAssigneeFilter === UNASSIGNED ? !e.assignee?.trim() : e.assignee?.trim() === recordAssigneeFilter);
     const matchesDate = recordDateRangeInvalid || ((!recordDateFrom || e.date >= recordDateFrom) && (!recordDateTo || e.date <= recordDateTo));
     return searchable.includes(recordQuery) &&
@@ -305,10 +340,10 @@ export default function Home() {
     }
     return b.date.localeCompare(a.date) || a.id.localeCompare(b.id);
   });
-  const todoQuery = todoSearch.toLocaleLowerCase("zh-Hant").trim();
+  const todoQuery = normalizeSearch(todoSearch);
   const shownTodos = (todoScope === "open" ? pending : closed).filter((entry) => {
     const student = studentMap.get(entry.studentId);
-    const matchesSearch = ((student?.name ?? "") + (student?.className ?? "") + (student?.number ?? "") + entry.category + entry.note + (entry.assignee ?? "") + ruleSearchText(entry.rule)).toLocaleLowerCase("zh-Hant").includes(todoQuery);
+    const matchesSearch = recordSearchText(entry, student).includes(todoQuery);
     const matchesAssignee = todoAssigneeFilter === ALL_ASSIGNEES || (todoAssigneeFilter === UNASSIGNED ? !entry.assignee?.trim() : entry.assignee?.trim() === todoAssigneeFilter);
     const matchesAdvanced = (todoClassFilter === "全部班級" || student?.className === todoClassFilter) &&
       (todoKindFilter === "全部類型" || entry.kind === todoKindFilter) &&
@@ -326,52 +361,30 @@ export default function Home() {
     if (todoSort === "student-asc") return aStudent.name.localeCompare(bStudent.name, "zh-Hant") || compareStudentClass(aStudent, bStudent);
     if (todoSort === "class-asc") return compareStudentClass(aStudent, bStudent) || latestActivityDate(a).localeCompare(latestActivityDate(b));
     if (todoScope === "completed") return (b.closedAt ?? latestActivityDate(b)).localeCompare(a.closedAt ?? latestActivityDate(a)) || a.id.localeCompare(b.id);
-    const rank = (entry: Entry) => !entry.dueDate ? 3 : entry.dueDate < today ? 0 : entry.dueDate === today ? 1 : 2;
-    return rank(a) - rank(b) || (a.dueDate ?? "9999-12-31").localeCompare(b.dueDate ?? "9999-12-31") || latestActivityDate(a).localeCompare(latestActivityDate(b)) || a.id.localeCompare(b.id);
+    return compareTodoPriority(a, b, today);
   });
-  const globalQuery = globalSearch.toLocaleLowerCase("zh-Hant").trim();
-  const globalResults = useMemo<GlobalSearchResult[]>(() => {
+  const studentPage = useListPage(shownStudents, JSON.stringify([studentSearch, studentClassFilter, studentFollowUpFilter, studentSort]));
+  const recordPage = useListPage(shownEntries, JSON.stringify([recordSearch, recordClassFilter, recordKindFilter, recordCategoryFilter, recordStatusFilter, recordAssigneeFilter, recordDateFrom, recordDateTo, recordSort]));
+  const todoPage = useListPage(shownTodos, JSON.stringify([todoSearch, todoScope, todoFilter, todoClassFilter, todoKindFilter, todoStatusFilter, todoAssigneeFilter, todoSort]));
+  const globalQuery = normalizeSearch(globalSearch);
+  const allGlobalResults = useMemo(() => {
     if (!globalQuery) return [];
-    const studentResults: GlobalSearchResult[] = students.flatMap((student) => {
-      const searchable = `${student.name} ${student.className} ${student.number}`.toLocaleLowerCase("zh-Hant");
-      if (!searchable.includes(globalQuery)) return [];
-      const name = student.name.toLocaleLowerCase("zh-Hant");
-      const score = name === globalQuery ? 0 : name.startsWith(globalQuery) ? 1 : name.includes(globalQuery) ? 2 : 3;
+    const studentResults = students.filter(student => matchesStudent(student, globalQuery)).map(student => {
       const stats = studentStats.get(student.id)!;
-      return [{
-        id: `student-${student.id}`,
-        type: "student",
-        title: student.name,
-        meta: `${student.className} · ${student.number}`,
-        description: `${stats.total} 筆紀錄 · ${stats.pending ? `${stats.pending} 項待跟進` : "目前沒有待跟進"}`,
-        studentId: student.id,
-        score,
-      }];
+      return { id: `student-${student.id}`, type: "student" as const, title: student.name,
+        meta: `${student.className} · 座號 ${student.seat} · ${student.number}`,
+        description: `${stats.total} 筆紀錄 · ${stats.pending} 項待跟進`,
+        studentId: student.id, score: studentSearchRank(student, globalQuery), date: "" };
     });
-    const recordResults: (GlobalSearchResult & { score: number; date: string })[] = entries.flatMap((entry) => {
-      const student = studentMap.get(entry.studentId);
-      if (!student) return [];
-      const searchable = [student.name, student.className, student.number, entry.kind, entry.category, entry.note, entry.assignee ?? "", entry.date, entry.status, ruleSearchText(entry.rule)]
-        .join(" ").toLocaleLowerCase("zh-Hant");
-      if (!searchable.includes(globalQuery)) return [];
-      const studentName = student.name.toLocaleLowerCase("zh-Hant");
-      const score = studentName === globalQuery ? 3 : studentName.startsWith(globalQuery) ? 4 : studentName.includes(globalQuery) ? 5 : 6;
-      return [{
-        id: `record-${entry.id}`,
-        type: "record",
-        title: `${student.name} · ${entry.category}`,
-        meta: `${entry.kind} · ${dateLabel(entry.date)} · ${entry.status}`,
-        description: entry.note,
-        studentId: student.id,
-        recordId: entry.id,
-        score,
-        date: entry.date,
-      }];
+    const recordResults = entries.filter(entry => recordSearchText(entry, studentMap.get(entry.studentId)).includes(globalQuery)).map(entry => {
+      const student = studentMap.get(entry.studentId)!;
+      return { id: `record-${entry.id}`, type: "record" as const, title: `${student.name} · ${entry.category}`,
+        meta: `${student.className} · 座號 ${student.seat} · ${student.number} · ${dateLabel(entry.date)} · ${entry.status}`,
+        description: entry.note, studentId: student.id, recordId: entry.id, score: 4 + studentSearchRank(student, globalQuery), date: entry.date };
     });
-    return [...studentResults.map((result) => ({ ...result, score: result.type === "student" ? (result.title.toLocaleLowerCase("zh-Hant") === globalQuery ? 0 : result.title.toLocaleLowerCase("zh-Hant").startsWith(globalQuery) ? 1 : 2) : 3, date: "" })), ...recordResults]
-      .sort((a, b) => a.score - b.score || b.date.localeCompare(a.date) || a.title.localeCompare(b.title, "zh-Hant"))
-      .slice(0, 8);
-  }, [entries, globalQuery, studentMap, studentStats]);
+    return [...studentResults, ...recordResults].sort((a,b) => a.score - b.score || b.date.localeCompare(a.date) || a.title.localeCompare(b.title, "zh-Hant"));
+  }, [entries, globalQuery, studentMap, studentStats, students]);
+  const globalResults: GlobalSearchResult[] = allGlobalResults.slice(0, 8);
   const studentActiveFilters = [
     studentSearch && `搜尋「${studentSearch}」`,
     studentClassFilter !== "全部班級" && studentClassFilter,
@@ -395,28 +408,22 @@ export default function Home() {
     todoScope === "open" && todoStatusFilter !== "全部狀態" && todoStatusFilter,
     todoAssigneeFilter !== ALL_ASSIGNEES && (todoAssigneeFilter === UNASSIGNED ? "未指定負責人" : todoAssigneeFilter),
   ].filter(Boolean) as string[];
-  const batchQuery = batchSearch.toLocaleLowerCase("zh-Hant").trim();
   const batchSelectedIdSet = new Set(batchStudentIds);
-  const batchVisibleStudents = students.filter((student) =>
-    (batchClassFilter === "全部班級" || student.className === batchClassFilter) &&
-    (student.name + student.className + student.number + student.seat).toLocaleLowerCase("zh-Hant").includes(batchQuery)
-  ).sort(compareStudentClass);
+  const batchVisibleStudents = students.filter(student => matchesStudent(student, batchSearch, batchClassFilter)).sort(compareStudentClass);
+  const batchPage = useListPage(batchVisibleStudents, JSON.stringify([batchSearch, batchClassFilter, batchFormOpen]));
   const batchSelectedStudents = students.filter((student) => batchSelectedIdSet.has(student.id)).sort(compareStudentClass);
-  const batchAllVisibleSelected = batchVisibleStudents.length > 0 && batchVisibleStudents.every((student) => batchSelectedIdSet.has(student.id));
+  const batchAllVisibleSelected = batchPage.items.length > 0 && batchPage.items.every((student) => batchSelectedIdSet.has(student.id));
   const batchRule = resolveRuleSelection(batchDraft);
   const batchRecordFields = batchRule.rule ? ruleRecordFields(batchRule.rule, batchRule.scoreChange) : batchDraft;
-  const batchDuplicateStudentIds = new Set(batchDraft.note.trim() ? batchSelectedStudents.filter((student) => entries.some((entry) =>
-    entry.studentId === student.id && entry.date === batchDraft.date && entry.kind === batchRecordFields.kind &&
-    entry.category === batchRecordFields.category && entry.rule?.code === batchRule.rule?.code &&
-    entry.rule?.category === batchRule.rule?.category && (entry.scoreChange ?? entry.rule?.score) === batchRule.scoreChange &&
-    normalizeRecordNote(entry.note) === normalizeRecordNote(batchDraft.note)
-  )).map((student) => student.id) : []);
+  const batchDuplicateStudentIds = duplicateStudentIds(entries, {
+    date: batchDraft.date, kind: batchRecordFields.kind, category: batchRecordFields.category,
+    rule: batchRule.rule ?? undefined, scoreChange: batchRule.scoreChange, note: batchDraft.note,
+  });
   const batchStudentsToCreate = batchSelectedStudents.filter((student) => !batchSkipDuplicates || !batchDuplicateStudentIds.has(student.id));
   const selected = studentId ? studentMap.get(studentId) : undefined;
   const selectedEntries = selected ? entries.filter((e) => e.studentId === selected.id) : [];
   const selectedTimeline = buildStudentTimeline(selectedEntries);
-  const draftStudent = studentMap.get(draft.studentId) ?? students[0];
-  const draftClassStudents = students.filter((s) => s.className === draftStudent.className);
+  const draftStudent = studentMap.get(draft.studentId);
   const draftRule = resolveRuleSelection(draft);
   const draftCodeRequired = !editingId || !!entries.find((entry) => entry.id === editingId)?.rule;
   const selectedCase = caseId ? entries.find((e) => e.id === caseId) : undefined;
@@ -433,7 +440,15 @@ export default function Home() {
     setTodoSearch(""); setTodoFilter("all"); setTodoClassFilter("全部班級"); setTodoKindFilter("全部類型");
     setTodoStatusFilter("全部狀態"); setTodoAssigneeFilter(ALL_ASSIGNEES);
   }
-  function navigate(next: Page) { setPage(next); setMenuOpen(false); }
+  function navigate(next: Page) { setPage(next); setMenuOpen(false); if (next !== page) window.scrollTo({ top: 0 }); }
+  function showStudentResults(query: string, className = "全部班級") {
+    resetStudentFilters(); setStudentSearch(query); setStudentClassFilter(className); setStudentSort("class-asc"); studentPage.onPage(1);
+    closeGlobalSearch(); navigate("students");
+  }
+  function showRecordResults() {
+    resetRecordFilters(); setRecordSearch(globalSearch); setRecordSort("date-desc"); recordPage.onPage(1);
+    closeGlobalSearch(); navigate("records");
+  }
   function closeGlobalSearch() {
     setGlobalSearchOpen(false);
     setGlobalSearchActiveIndex(0);
@@ -442,7 +457,6 @@ export default function Home() {
     closeGlobalSearch();
     setGlobalSearch("");
     if (result.type === "student") {
-      navigate("students");
       setStudentId(result.studentId);
       return;
     }
@@ -464,14 +478,14 @@ export default function Home() {
     }
   }
   function addEntry(id?: string) {
-    setEditingId(null); setFormReturnCaseId(null); setDraft({ ...newDraft(), studentId: id || students[0].id });
+    setEditingId(null); setFormReturnCaseId(null); setDraft({ ...newDraft(), studentId: id ?? "" });
     setEntryError("");
     setStudentId(null); setCaseId(null); setCaseReturnStudentId(null); setBatchFormOpen(false); setFormOpen(true);
   }
   function openBatchForm() {
     setFormReturnCaseId(null);
     setBatchDraft(newBatchDraft()); setBatchStudentIds([]); setBatchClassFilter("全部班級"); setBatchSearch("");
-    setBatchSkipDuplicates(true); setBatchError(""); setBatchStep("students");
+    setBatchSkipDuplicates(true); setBatchError(""); setBatchSelectAllPending(false); setBatchStep("students");
     setStudentId(null); setCaseId(null); setCaseReturnStudentId(null); setFormOpen(false); setBatchFormOpen(true);
   }
   function closeBatchForm(skipConfirmation = false) {
@@ -484,9 +498,16 @@ export default function Home() {
     setBatchError("");
   }
   function toggleVisibleBatchStudents() {
-    const visibleIds = new Set(batchVisibleStudents.map((student) => student.id));
-    setBatchStudentIds((current) => batchAllVisibleSelected ? current.filter((id) => !visibleIds.has(id)) : [...new Set([...current, ...visibleIds])]);
+    setBatchStudentIds(current => toggleSelection(current, batchPage.items));
     setBatchError("");
+  }
+  function selectAllMatchingBatchStudents() {
+    if (!batchVisibleStudents.length) return;
+    setBatchSelectAllPending(true);
+  }
+  function confirmAllMatchingBatchStudents() {
+    setBatchStudentIds(current => [...new Set([...current, ...batchVisibleStudents.map(student => student.id)])]);
+    setBatchSelectAllPending(false); setBatchError("");
   }
   function goToBatchDetails() {
     if (!batchSelectedStudents.length) { setBatchError("請至少選擇 1 位學生。"); return; }
@@ -509,7 +530,7 @@ export default function Home() {
     const createdAtIso = new Date(createdAt).toISOString();
     const batchId = "b" + createdAt;
     const note = batchDraft.note.trim();
-    const closureSummary = "此紀錄在批次建立時標記為無需跟進。";
+    const closureSummary = "此紀錄在批次建立時標記為不需跟進。";
     const createdEntries: Entry[] = batchStudentsToCreate.map((student, index) => ({
       id: `${batchId}-${index + 1}`,
       batchId,
@@ -553,7 +574,9 @@ export default function Home() {
   }
   function saveEntry(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!draft.studentId || !draft.date || !draft.category || !draft.note.trim()) return;
+    if (!studentMap.has(draft.studentId)) { setEntryError("請先明確選擇學生並核對身分。"); return; }
+    if (!draft.date || !draft.category || !draft.note.trim()) return;
+    if (draft.date > today) { setEntryError("紀錄日期不可遲於今天。"); return; }
     const { rule, scoreChange, error } = resolveRuleSelection(draft);
     if (error || (draftCodeRequired && !rule)) { setEntryError(error || "請選擇或輸入有效的 Code。"); return; }
     const savedDraft = {
@@ -577,7 +600,7 @@ export default function Home() {
       setCaseId(id);
       setNotice(draft.needsFollowUp ? "新紀錄已加入" : "新紀錄已建立並直接完結");
     }
-    setFormOpen(false); setFormReturnCaseId(null); if (!formReturnCaseId) navigate("records");
+    setFormOpen(false); setFormReturnCaseId(null);
   }
   function openCase(id: string) {
     setCaseReturnStudentId(studentId);
@@ -620,7 +643,7 @@ export default function Home() {
   }
   const titles: Record<Page, string> = { dashboard: "訓育工作台", todos: "待辦中心", students: "學生名冊", records: "獎懲紀錄" };
   const subtitles: Record<Page, string> = {
-    dashboard: "掌握需要處理的學生事務與最新紀錄。",
+    dashboard: "先找學生，再登記與核對。所有操作只使用虛構示範資料。",
     todos: "按期限處理未結案個案，並追蹤每項跟進安排。",
     students: "查看學生資料與個別訓育紀錄。",
     records: "集中查閱、篩選及更新訓育事項。",
@@ -629,7 +652,7 @@ export default function Home() {
   const subtitle = subtitles[page];
 
   return <div className="app">
-    <aside className={"sidebar" + (menuOpen ? " open" : "")}>
+    <aside inert={modalOpen} className={"sidebar" + (menuOpen ? " open" : "")}>
       <div className="brand"><div className="brand-icon"><BookOpenCheck size={22}/></div><div><strong>校園訓育系統</strong><small>STUDENT AFFAIRS</small></div></div>
       <div className="side-label">工作空間</div>
       <nav aria-label="主要導覽">{nav.map(({ id, text, Icon }) => <button key={id} type="button" className={"nav-item" + (page === id ? " active" : "")} onClick={() => navigate(id)}><Icon size={19}/>{text}{id === "todos" && <span className="nav-count">{pending.length}</span>}{page === id && <i/>}</button>)}</nav>
@@ -638,11 +661,15 @@ export default function Home() {
       <div className="side-user"><span>訓</span><div><strong>訓育組</strong><small>管理介面示範</small></div><ChevronDown size={15}/></div>
     </aside>
     {menuOpen && <button type="button" className="scrim" aria-label="關閉選單" onClick={() => setMenuOpen(false)}/>}
-    <div className="main">
-      <header className="topbar"><button type="button" className="mobile-menu" aria-label="開啟選單" onClick={() => setMenuOpen(true)}><Menu size={21}/></button><div className="crumb">校園管理 <ChevronRight size={14}/> <strong>{title}</strong></div><GlobalSearch
+    <div className="main" inert={modalOpen}>
+      <header className="topbar"><button type="button" className="mobile-menu" aria-label="開啟選單" onClick={() => setMenuOpen(true)}><Menu size={21}/></button><div className="crumb">校園管理 <ChevronRight size={14}/> <strong>{title}</strong></div>{page !== "dashboard" && <GlobalSearch
         query={globalSearch}
         open={globalSearchOpen}
         results={globalResults}
+        studentCount={allGlobalResults.filter(result => result.type === "student").length}
+        recordCount={allGlobalResults.filter(result => result.type === "record").length}
+        onAllStudents={() => showStudentResults(globalSearch)}
+        onAllRecords={showRecordResults}
         activeIndex={globalSearchActiveIndex}
         inputRef={globalSearchInputRef}
         containerRef={globalSearchRef}
@@ -652,8 +679,9 @@ export default function Home() {
         onActiveIndexChange={setGlobalSearchActiveIndex}
         onSelect={selectGlobalSearchResult}
         onKeyDown={handleGlobalSearchKeyDown}
-      /><div className="top-meta"><span><CalendarDays size={15}/> 2026–27 學年</span><b><i/> 示範版</b></div></header>
+      />}<div className="top-meta"><span><CalendarDays size={15}/> 2026–27 學年</span><b><i/> 示範版</b></div></header>
       <main className="content">
+        {largeFixture && <p className="fixture-banner" role="status">大量資料測試 · 840 位虛構學生 / 5,000 筆初始紀錄 · 班級配置只供測試 · 重新整理重置</p>}
         <div className="page-heading">
           <div><small>STUDENT AFFAIRS / 訓育管理</small><h1>{title}</h1><p>{subtitle}</p></div>
           {page === "dashboard" && <div className="page-actions">
@@ -662,11 +690,26 @@ export default function Home() {
           </div>}
         </div>
         {page === "dashboard" && <>
-          <div className="dashboard-grid"><section className="card list-card"><div className="card-heading"><div><small>最新動態</small><h2>近期訓育紀錄</h2></div><button type="button" onClick={() => navigate("records")}>查看全部 <ArrowRight size={15}/></button></div>{[...entries].sort((a,b) => b.date.localeCompare(a.date)).slice(0,4).map((e) => { const s = studentMap.get(e.studentId)!; return <div className="activity" key={e.id}><Avatar student={s}/><div><strong>{s.name} <span>· {s.className}</span></strong><p>{e.category} · {e.note}</p></div><section><KindTag kind={e.kind}/><small>{dateLabel(e.date)}</small></section></div>; })}</section>
-          <section className="card follow-card"><div className="card-heading"><div><small>待辦清單</small><h2>需要跟進</h2></div><b>{pending.length} 項</b></div>{pending.length ? pending.map((e) => { const s = studentMap.get(e.studentId)!; return <div className="follow" key={e.id}><span className={e.kind === "違規" ? "warn red" : "warn"}><Clock3 size={17}/></span><div><strong>{s.name} <span>· {s.className}</span></strong><p>{e.category}</p></div><button type="button" aria-label={"查看" + s.name + "的個案詳情"} onClick={() => openCase(e.id)}><ChevronRight size={18}/></button></div>; }) : <p className="empty-inline">目前沒有待跟進事項。</p>}<button type="button" className="follow-all" onClick={() => navigate("todos")}>前往待辦中心 <ArrowRight size={15}/></button></section></div>
+          <StudentSearch mode="workbench" students={students} query={lookupQuery} className={lookupClass} onQuery={setLookupQuery} onClass={setLookupClass}
+            inputRef={lookupInputRef} onSelect={addEntry} onDetails={setStudentId} onViewAll={() => showStudentResults(lookupQuery, lookupClass)}/>
+          <div className="dashboard-grid">
+            <section className="card list-card"><div className="card-heading"><div><small>最新動態</small><h2>最近 5 筆紀錄</h2></div><button type="button" onClick={() => { resetRecordFilters(); setRecordSort("date-desc"); recordPage.onPage(1); navigate("records"); }}>全部紀錄 <ArrowRight size={15}/></button></div>
+              {[...entries].sort((a,b) => b.date.localeCompare(a.date)).slice(0,5).map(entry => { const student = studentMap.get(entry.studentId)!; return <button type="button" className="activity" key={entry.id} onClick={() => openCase(entry.id)}>
+                <Avatar student={student}/><div><strong>{student.name} <span>· {student.className} · {student.seat} 號</span></strong><p>{entry.category}</p><small>{student.number} · {dateLabel(entry.date)}</small></div><section><b>{scoreLabel(entry)}</b><StatusTag status={entry.status}/></section>
+              </button>; })}
+            </section>
+            <section className="card follow-card"><div className="card-heading"><div><small>待辦清單 · 共 {pending.length} 項</small><h2>優先處理 5 項</h2></div></div>
+              {[...pending].sort((a,b) => compareTodoPriority(a,b,today)).slice(0,5).map(entry => { const student = studentMap.get(entry.studentId)!; const due = todoDueMeta(entry,today); return <button type="button" className={"follow " + due.tone} key={entry.id} onClick={() => openCase(entry.id)}>
+                <div><strong>{student.name} <span>· {student.className} · {student.seat} 號</span></strong><p>{entry.category}</p><small>{student.number} · 負責人：{entry.assignee || "未指定"}</small></div><section><strong>{due.label}</strong><small>{due.date}</small><ChevronRight size={18}/></section>
+              </button>; })}
+              {!pending.length && <p className="empty-inline">目前沒有待跟進事項。</p>}
+              <button type="button" className="follow-all" onClick={() => { resetTodoFilters(); setTodoScope("open"); setTodoSort("priority"); todoPage.onPage(1); navigate("todos"); }}>完整待辦清單 <ArrowRight size={15}/></button>
+            </section>
+          </div>
         </>}
         {page === "todos" && <TodoCenter
-          todos={shownTodos}
+          todos={todoPage.items}
+          pagination={todoPage}
           studentMap={studentMap}
           today={today}
           scope={todoScope}
@@ -700,7 +743,9 @@ export default function Home() {
           onStart={startCase}
         />}
         {page === "students" && <StudentDirectory
-          students={shownStudents}
+          students={studentPage.items}
+          pagination={studentPage}
+          onAddEntry={addEntry}
           totalCount={students.length}
           stats={studentStats}
           search={studentSearch}
@@ -719,7 +764,8 @@ export default function Home() {
           onOpenStudent={setStudentId}
         />}
         {page === "records" && <RecordsDirectory
-          entries={shownEntries}
+          entries={recordPage.items}
+          pagination={recordPage}
           totalCount={entries.length}
           studentMap={studentMap}
           search={recordSearch}
@@ -761,14 +807,13 @@ export default function Home() {
         <form className="entry-form" onSubmit={saveEntry}><div className="panel-body">
           <p className="form-intro">選擇校本事項 Code，再填寫事件內容及日期。</p>
           {formReturnCaseId && <p className="case-edit-hint">儲存後會返回原個案；已有的跟進安排及記錄會保留。</p>}
-          <div className="field-row"><label className="field"><span>班別 *</span><select value={draftStudent.className} onChange={(e) => { const first = students.find((s) => s.className === e.target.value); if (first) setDraft({ ...draft, studentId: first.id }); }} required>{classes.slice(1).map((className) => <option key={className}>{className}</option>)}</select></label><label className="field"><span>學生姓名 *</span><select value={draft.studentId} onChange={(e) => setDraft({ ...draft, studentId: e.target.value })} required>{draftClassStudents.map((s) => <option value={s.id} key={s.id}>{s.name}</option>)}</select></label></div>
-          <label className="field"><span>學號</span><input value={draftStudent.number} readOnly/></label>
+          <StudentPicker students={students} value={draft.studentId} onChange={id => { setDraft(current => ({ ...current, studentId: id })); setEntryError(""); }}/>
           <RulePicker id="entry-rule" value={draft} required={draftCodeRequired} onChange={(value) => { setDraft((current) => ({ ...current, ...value })); setEntryError(""); }}/>
           {!draftCodeRequired && !draftRule.rule && <div className="legacy-rule">
             <p>此舊紀錄未有 Code，可保留原有類型及事項，或選用校本規則。</p>
             <div className="field-row"><label className="field"><span>原有紀錄類型</span><select value={draft.kind} onChange={(e) => { const kind = e.target.value as LegacyKind; setDraft({ ...draft, kind, category: categories[kind][0] }); }}><option>嘉許</option><option>提醒</option><option>違規</option></select></label><label className="field"><span>原有事項分類</span><select value={draft.category} onChange={(e) => setDraft({ ...draft, category: e.target.value })}>{(categories[draft.kind as LegacyKind] ?? [draft.category]).map((c) => <option key={c}>{c}</option>)}</select></label></div>
           </div>}
-          <label className="field"><span>日期 *</span><input type="date" value={draft.date} onChange={(e) => setDraft({ ...draft, date: e.target.value })} required/></label>
+          <label className="field"><span>日期 *</span><input type="date" max={today} value={draft.date} onChange={(e) => setDraft({ ...draft, date: e.target.value })} required/></label>
           <label className="field"><span>內容說明 *</span><textarea rows={5} maxLength={300} placeholder="簡述事件、已採取的行動或後續安排…" value={draft.note} onChange={(e) => setDraft({ ...draft, note: e.target.value })} required/><small>{draft.note.length}/300 字</small></label>
           {draft.status !== "已結案" ? <fieldset className="entry-follow-field batch-follow-field"><legend>儲存後是否需要跟進？</legend><div className="batch-follow-options">
             <label className={draft.needsFollowUp ? "active" : ""}><input type="radio" name="entry-follow-up" checked={draft.needsFollowUp} onChange={() => setDraft({ ...draft, needsFollowUp: true })}/><span><strong>需要跟進</strong><small>{draft.status === "跟進中" ? "保留目前跟進中的狀態" : "列入待辦，之後安排跟進"}</small></span></label>
@@ -776,16 +821,22 @@ export default function Home() {
           </div></fieldset> : <p className="case-edit-hint">此個案已結案，更正資料不會重新開啟跟進。</p>}
           {entryError && <p className="rule-error" role="alert">{entryError}</p>}
           <p className="form-warning"><ShieldCheck size={16}/>這是前端示範版。資料只會在目前頁面暫時顯示。</p>
-        </div><div className="panel-foot entry-form-actions"><button type="button" className="btn secondary" onClick={closeEntryForm}>{formReturnCaseId ? "取消並返回個案" : "取消"}</button><button type="submit" className="btn primary" disabled={!!draftRule.error || (draftCodeRequired && !draftRule.rule)}><Check size={17}/>{!draft.needsFollowUp && draft.status !== "已結案" ? editingId ? "儲存並完結" : "建立並完結" : formReturnCaseId ? "儲存更正並返回" : editingId ? "儲存變更" : "建立紀錄"}</button></div></form>
+        </div><div className="panel-foot entry-form-actions"><button type="button" className="btn secondary" onClick={closeEntryForm}>{formReturnCaseId ? "取消並返回個案" : "取消"}</button><button type="submit" className="btn primary" disabled={!draftStudent || !!draftRule.error || (draftCodeRequired && !draftRule.rule)}><Check size={17}/>{!draft.needsFollowUp && draft.status !== "已結案" ? editingId ? "儲存並完結" : "建立並完結" : formReturnCaseId ? "儲存更正並返回" : editingId ? "儲存變更" : "建立紀錄"}</button></div></form>
       </section>
     </div>}
     {batchFormOpen && <BatchRecordPanel
       step={batchStep}
       draft={batchDraft}
-      visibleStudents={batchVisibleStudents}
+      visibleStudents={batchPage.items}
+      pagination={batchPage}
+      onSelectAllMatching={selectAllMatchingBatchStudents}
+      selectAllPending={batchSelectAllPending}
+      combinedCount={new Set([...batchStudentIds, ...batchVisibleStudents.map(student => student.id)]).size}
+      onConfirmAllMatching={confirmAllMatchingBatchStudents}
+      onCancelAllMatching={() => setBatchSelectAllPending(false)}
       selectedStudents={batchSelectedStudents}
       selectedIds={batchSelectedIdSet}
-      duplicateIds={batchDuplicateStudentIds}
+      duplicateIds={new Set(batchSelectedStudents.filter(student => batchDuplicateStudentIds.has(student.id)).map(student => student.id))}
       allVisibleSelected={batchAllVisibleSelected}
       classFilter={batchClassFilter}
       search={batchSearch}
@@ -796,8 +847,8 @@ export default function Home() {
       today={today}
       onClose={() => closeBatchForm()}
       onStepChange={(next) => { setBatchError(""); setBatchStep(next); }}
-      onClassFilterChange={setBatchClassFilter}
-      onSearch={setBatchSearch}
+      onClassFilterChange={value => { setBatchClassFilter(value); setBatchSelectAllPending(false); }}
+      onSearch={value => { setBatchSearch(value); setBatchSelectAllPending(false); }}
       onToggleStudent={toggleBatchStudent}
       onToggleVisible={toggleVisibleBatchStudents}
       onClearSelection={() => { setBatchStudentIds([]); setBatchError(""); }}
@@ -813,6 +864,10 @@ export default function Home() {
 }
 
 type GlobalSearchProps = {
+  studentCount: number;
+  recordCount: number;
+  onAllStudents: () => void;
+  onAllRecords: () => void;
   query: string;
   open: boolean;
   results: GlobalSearchResult[];
@@ -828,7 +883,7 @@ type GlobalSearchProps = {
 };
 
 function GlobalSearch({
-  query, open, results, activeIndex, inputRef, containerRef, onOpen, onClose, onQueryChange,
+  query, open, results, activeIndex, inputRef, containerRef, onOpen, onClose, onQueryChange, studentCount, recordCount, onAllStudents, onAllRecords,
   onActiveIndexChange, onSelect, onKeyDown,
 }: GlobalSearchProps) {
   return <div className="global-search" ref={containerRef}>
@@ -842,22 +897,25 @@ function GlobalSearch({
         aria-expanded={open}
         aria-controls="global-search-results"
         role="combobox"
+        aria-autocomplete="list"
+        aria-activedescendant={open && results[activeIndex] ? "global-" + results[activeIndex].id : undefined}
         onFocus={onOpen}
         onChange={(event) => onQueryChange(event.target.value)}
         onKeyDown={onKeyDown}
       />
       {query ? <button type="button" className="global-search-clear" aria-label="清除全域搜尋" onClick={() => { onQueryChange(""); inputRef.current?.focus(); }}><X size={14}/></button> : <kbd>Ctrl K</kbd>}
     </div>
-    {open && <div className="global-search-panel" id="global-search-results" role="listbox" aria-label="全域搜尋結果">
+    {open && <div className="global-search-panel">
       {!query && <div className="global-search-hint"><Sparkles size={18}/><strong>快速搜尋</strong><p>搜尋學生姓名、班別、學號、事項或內容。</p><span>按 <kbd>Ctrl K</kbd> 可隨時開啟</span></div>}
       {query && results.length > 0 && <>
         <div className="global-search-heading"><span>搜尋結果</span><small>顯示最相關的 {results.length} 項</small></div>
-        <div className="global-search-results">{results.map((result, index) => <button
+        <div className="global-search-results" id="global-search-results" role="listbox" aria-label="全域搜尋結果">{results.map((result, index) => <button
           type="button"
           role="option"
           aria-selected={index === activeIndex}
           className={"global-search-result" + (index === activeIndex ? " active" : "")}
           key={result.id}
+          id={"global-" + result.id}
           onMouseEnter={() => onActiveIndexChange(index)}
           onClick={() => onSelect(result)}
         >
@@ -867,6 +925,7 @@ function GlobalSearch({
         </button>)}</div>
       </>}
       {query && !results.length && <div className="global-search-empty"><Search size={20}/><strong>找不到相符內容</strong><p>請試試學生姓名、學號、事項分類或內容關鍵字。</p></div>}
+      {query && <div className="global-search-links"><button type="button" onClick={onAllStudents}>完整學生結果（{studentCount}）</button><button type="button" onClick={onAllRecords}>完整紀錄結果（{recordCount}）</button></div>}
       {query && <div className="global-search-footer"><span><kbd>↑</kbd><kbd>↓</kbd> 選擇</span><span><kbd>Enter</kbd> 開啟</span><button type="button" onClick={onClose}>關閉</button></div>}
     </div>}
   </div>;
@@ -876,6 +935,12 @@ type BatchRecordPanelProps = {
   step: BatchStep;
   draft: BatchDraft;
   visibleStudents: Student[];
+  pagination: ListPage;
+  onSelectAllMatching: () => void;
+  selectAllPending: boolean;
+  combinedCount: number;
+  onConfirmAllMatching: () => void;
+  onCancelAllMatching: () => void;
   selectedStudents: Student[];
   selectedIds: Set<string>;
   duplicateIds: Set<string>;
@@ -902,7 +967,7 @@ type BatchRecordPanelProps = {
 };
 
 function BatchRecordPanel({
-  step, draft, visibleStudents, selectedStudents, selectedIds, duplicateIds, allVisibleSelected,
+  step, draft, visibleStudents, selectedStudents, selectedIds, duplicateIds, allVisibleSelected, pagination, onSelectAllMatching, selectAllPending, combinedCount, onConfirmAllMatching, onCancelAllMatching,
   classFilter, search, classes, skipDuplicates, createCount, error, today, onClose, onStepChange,
   onClassFilterChange, onSearch, onToggleStudent, onToggleVisible, onClearSelection, onDraftChange,
   onSkipDuplicatesChange, onNextStudents, onSubmitDetails, onConfirm,
@@ -914,6 +979,7 @@ function BatchRecordPanel({
     { id: "review", label: "核對建立" },
   ];
   const stepIndex = steps.findIndex((item) => item.id === step);
+  const reviewPage = useListPage(selectedStudents, selectedStudents.map(student => student.id).join(","));
   const duplicateCount = duplicateIds.size;
   const displayedSelected = selectedStudents.slice(0, 6);
   const selectedRule = resolveRuleSelection(draft);
@@ -942,7 +1008,13 @@ function BatchRecordPanel({
             <label className="field"><span>班別</span><select value={classFilter} onChange={(event) => onClassFilterChange(event.target.value)}>{classes.map((className) => <option key={className}>{className}</option>)}</select></label>
             <label className="batch-search"><Search size={16}/><input autoFocus aria-label="搜尋批次學生" placeholder="搜尋姓名、學號或座號" value={search} onChange={(event) => onSearch(event.target.value)}/></label>
           </div>
-          <div className="batch-picker-head"><div><strong>學生名單</strong><span aria-live="polite">目前顯示 {visibleStudents.length} 位</span></div><div><button type="button" onClick={onToggleVisible} disabled={!visibleStudents.length}>{allVisibleSelected ? "取消目前名單" : "選取目前名單"}</button><button type="button" onClick={onClearSelection} disabled={!selectedStudents.length}>清除已選</button></div></div>
+          <div className="batch-picker-head"><div><strong>學生名單</strong><span aria-live="polite">目前顯示 {visibleStudents.length} 位</span></div><div><button type="button" onClick={onToggleVisible} disabled={!visibleStudents.length}>{allVisibleSelected ? "取消本頁選取" : "全選本頁"}</button><button type="button" onClick={onClearSelection} disabled={!selectedStudents.length}>清除已選</button></div></div>
+          <button type="button" className="batch-select-all btn secondary" disabled={!pagination.total} onClick={onSelectAllMatching}>選取全部符合條件的 {pagination.total} 位</button>
+          {selectAllPending && <section className="batch-selection-confirm" role="alert" aria-label="確認全部選取">
+            <strong>將選取全部符合條件的 {pagination.total} 位（不限本頁）</strong>
+            <p>保留原有選擇，確認後共 {combinedCount} 位學生。此步只選取名單，尚未建立紀錄。</p>
+            <div><button type="button" className="btn secondary" onClick={onCancelAllMatching}>取消全選</button><button type="button" className="btn primary" onClick={onConfirmAllMatching}>確認選取 {pagination.total} 位</button></div>
+          </section>}
           <div className="batch-student-list" aria-label="可選學生">
             {visibleStudents.map((student) => <label key={student.id} className={"batch-student-row" + (selectedIds.has(student.id) ? " selected" : "")}>
               <input type="checkbox" checked={selectedIds.has(student.id)} onChange={() => onToggleStudent(student.id)}/>
@@ -952,6 +1024,7 @@ function BatchRecordPanel({
             </label>)}
             {!visibleStudents.length && <div className="batch-empty"><Search size={20}/><strong>找不到學生</strong><span>請更改班別或搜尋字詞。</span></div>}
           </div>
+          <ListPagination page={pagination} label="批次學生" unit="位"/>
           <div className="batch-selected-summary" aria-live="polite"><div><strong>已選 {selectedStudents.length} 位學生</strong><span>可跨班選擇</span></div>{selectedStudents.length > 0 && <section>{displayedSelected.map((student) => <span key={student.id}>{student.className} · {student.name}</span>)}{selectedStudents.length > displayedSelected.length && <b>另有 {selectedStudents.length - displayedSelected.length} 位</b>}</section>}</div>
           {error && <p className="batch-error" role="alert">{error}</p>}
         </div>
@@ -965,7 +1038,7 @@ function BatchRecordPanel({
           <label className="field"><span>日期 *</span><input type="date" max={today} value={draft.date} onChange={(event) => onDraftChange({ date: event.target.value })} required/></label>
           <label className="field"><span>內容說明 *</span><textarea rows={5} maxLength={300} placeholder="輸入所有已選學生共用的事項內容…" value={draft.note} onChange={(event) => onDraftChange({ note: event.target.value })} required/><small>{draft.note.length}/300 字</small></label>
           <fieldset className="batch-follow-field"><legend>建立後是否需要跟進？</legend><div className="batch-follow-options">
-            <label className={!draft.needsFollowUp ? "active" : ""}><input type="radio" name="batch-follow-up" checked={!draft.needsFollowUp} onChange={() => onDraftChange({ needsFollowUp: false })}/><span><strong>無需跟進</strong><small>建立後列為已結案，不會加入待辦中心</small></span></label>
+            <label className={!draft.needsFollowUp ? "active" : ""}><input type="radio" name="batch-follow-up" checked={!draft.needsFollowUp} onChange={() => onDraftChange({ needsFollowUp: false })}/><span><strong>不需跟進</strong><small>建立後列為已結案，不會加入待辦中心</small></span></label>
             <label className={draft.needsFollowUp ? "active" : ""}><input type="radio" name="batch-follow-up" checked={draft.needsFollowUp} onChange={() => onDraftChange({ needsFollowUp: true })}/><span><strong>需要跟進</strong><small>每位學生各自建立一項待辦</small></span></label>
           </div></fieldset>
           {draft.needsFollowUp && <div className="batch-follow-fields"><div className="field-row"><label className="field"><span>共同負責人</span><input maxLength={40} placeholder="例如：中一級班主任" value={draft.assignee} onChange={(event) => onDraftChange({ assignee: event.target.value })}/></label><label className="field"><span>共同跟進期限</span><input type="date" min={draft.date} value={draft.dueDate} onChange={(event) => onDraftChange({ dueDate: event.target.value })}/></label></div><small>兩項均可留空，之後可在個案詳情逐筆安排。</small></div>}
@@ -979,10 +1052,11 @@ function BatchRecordPanel({
         <div className="panel-body batch-body" ref={stepContentRef} tabIndex={-1} aria-label="批次建立第 3 步：核對建立">
           <div className="batch-review-hero"><span><ClipboardList size={23}/></span><div><small>準備建立</small><strong>{createCount} 筆獨立紀錄</strong><p>建立後，每位學生的時間線及個案會分開顯示。</p></div></div>
           {selectedRule.rule && <RuleDetails rule={selectedRule.rule} scoreChange={selectedRule.scoreChange}/>}
-          <div className="batch-review-grid"><div><span>日期</span><strong>{dateLabel(draft.date)}</strong></div><div><span>跟進狀態</span><strong>{draft.needsFollowUp ? "待跟進" : "無需跟進（已結案）"}</strong></div>{draft.needsFollowUp && <><div><span>負責人</span><strong>{draft.assignee.trim() || "未指定"}</strong></div><div><span>跟進期限</span><strong>{draft.dueDate ? dateLabel(draft.dueDate) : "未設定"}</strong></div></>}</div>
+          <div className="batch-review-grid"><div><span>日期</span><strong>{dateLabel(draft.date)}</strong></div><div><span>跟進狀態</span><strong>{draft.needsFollowUp ? "待跟進" : "不需跟進（已結案）"}</strong></div>{draft.needsFollowUp && <><div><span>負責人</span><strong>{draft.assignee.trim() || "未指定"}</strong></div><div><span>跟進期限</span><strong>{draft.dueDate ? dateLabel(draft.dueDate) : "未設定"}</strong></div></>}</div>
           <div className="batch-review-note"><span>內容說明</span><p>{draft.note.trim()}</p></div>
           <div className="batch-review-list-head"><div><strong>學生名單</strong><span>{selectedStudents.length} 位</span></div>{duplicateCount > 0 && <b>{duplicateCount} 筆可能重複</b>}</div>
-          <div className="batch-review-list">{selectedStudents.map((student) => <div key={student.id} className={duplicateIds.has(student.id) ? "duplicate" : ""}><Avatar student={student}/><span><strong>{student.name}</strong><small>{student.className} · 座號 {student.seat} · {student.number}</small></span>{duplicateIds.has(student.id) ? <em>{skipDuplicates ? "將略過" : "仍會建立"}</em> : <CheckCircle2 size={17}/>}</div>)}</div>
+          <div className="batch-review-list">{reviewPage.items.map((student) => <div key={student.id} className={duplicateIds.has(student.id) ? "duplicate" : ""}><Avatar student={student}/><span><strong>{student.name}</strong><small>{student.className} · 座號 {student.seat} · {student.number}</small></span>{duplicateIds.has(student.id) ? <em>{skipDuplicates ? "將略過" : "仍會建立"}</em> : <CheckCircle2 size={17}/>}</div>)}</div>
+          <ListPagination page={reviewPage} label="核對名單" unit="位"/>
           {duplicateCount > 0 && <label className="batch-duplicate-option"><input type="checkbox" checked={skipDuplicates} onChange={(event) => onSkipDuplicatesChange(event.target.checked)}/><span><strong>略過 {duplicateCount} 筆完全重複紀錄</strong><small>同一學生、日期、校本範疇、Code、加減分數及內容完全相同。</small></span></label>}
           {createCount === 0 && <p className="batch-error" role="alert">全部所選學生已有相同紀錄。請取消「略過重複紀錄」，或返回修改內容。</p>}
           {error && <p className="batch-error" role="alert">{error}</p>}
@@ -1002,8 +1076,10 @@ function FilterSummary({ labels, onReset }: { labels: string[]; onReset: () => v
   </div>;
 }
 
-function StudentDirectory({ students: shown, totalCount, stats, search, classFilter, followUpFilter, sort, filtersOpen, activeFilters, classes, onSearch, onClassFilterChange, onFollowUpFilterChange, onSortChange, onFiltersOpenChange, onReset, onOpenStudent }: {
+function StudentDirectory({ students: shown, totalCount, pagination, onAddEntry, stats, search, classFilter, followUpFilter, sort, filtersOpen, activeFilters, classes, onSearch, onClassFilterChange, onFollowUpFilterChange, onSortChange, onFiltersOpenChange, onReset, onOpenStudent }: {
   students: Student[];
+  pagination: ListPage;
+  onAddEntry: (id: string) => void;
   totalCount: number;
   stats: Map<string, { total: number; pending: number; overdue: number; latest: string }>;
   search: string;
@@ -1021,10 +1097,10 @@ function StudentDirectory({ students: shown, totalCount, stats, search, classFil
   onReset: () => void;
   onOpenStudent: (id: string) => void;
 }) {
-  const advancedCount = Number(classFilter !== "全部班級") + Number(followUpFilter !== "全部跟進");
+  const advancedCount = Number(followUpFilter !== "全部跟進");
   return <section className="card table-card">
     <div className="table-heading">
-      <div><small>STUDENT DIRECTORY</small><h2>學生資料 <b>{shown.length}</b></h2></div>
+      <div><small>STUDENT DIRECTORY</small><h2>學生資料 <b>{pagination.total}</b></h2></div>
       <div className="filters list-toolbar">
         <label className="search"><Search size={16}/><input aria-label="搜尋學生" placeholder="搜尋姓名、班級或學號" value={search} onChange={(event) => onSearch(event.target.value)}/></label>
         <label className="select toolbar-select"><ArrowUpDown size={15}/><select aria-label="學生排序" value={sort} onChange={(event) => onSortChange(event.target.value as StudentSort)}>
@@ -1036,21 +1112,24 @@ function StudentDirectory({ students: shown, totalCount, stats, search, classFil
     {filtersOpen && <div className="advanced-filter-panel" id="student-advanced-filters">
       <div className="advanced-filter-head"><div><strong>篩選學生</strong><span>條件會同時套用</span></div><button type="button" onClick={onReset}><RotateCcw size={14}/>重設</button></div>
       <div className="advanced-filter-grid compact">
-        <label className="filter-field"><span>班級</span><select value={classFilter} onChange={(event) => onClassFilterChange(event.target.value)}>{classes.map((item) => <option key={item}>{item}</option>)}</select></label>
+
         <label className="filter-field"><span>跟進情況</span><select value={followUpFilter} onChange={(event) => onFollowUpFilterChange(event.target.value as StudentFollowUpFilter)}><option>全部跟進</option><option>有待跟進</option><option>有逾期待辦</option><option>沒有待跟進</option></select></label>
       </div>
     </div>}
+    <div className="persistent-filters"><label className="filter-field"><span>班級</span><select value={classFilter} onChange={(event) => onClassFilterChange(event.target.value)}>{classes.map((item) => <option key={item}>{item}</option>)}</select></label></div>
     <FilterSummary labels={activeFilters} onReset={onReset}/>
     <div className="table-scroll"><table><thead><tr><th>學生</th><th>班級 / 學號</th><th>紀錄數</th><th>待跟進</th><th>操作</th></tr></thead><tbody>{shown.map((student) => {
       const item = stats.get(student.id)!;
-      return <tr key={student.id}><td><div className="person"><Avatar student={student}/><div><strong>{student.name}</strong><small>座號 {student.seat}</small></div></div></td><td><strong>{student.className}</strong><small className="cell-sub">{student.number}</small></td><td><span className="count">{item.total}</span></td><td>{item.pending ? <span className={item.overdue ? "todo-count overdue-text" : "todo-count"}>● {item.pending} 項{item.overdue ? `（${item.overdue} 項逾期）` : ""}</span> : <span className="muted">—</span>}</td><td><button type="button" className="row-button" onClick={() => onOpenStudent(student.id)}>查看資料 <ChevronRight size={15}/></button></td></tr>;
+      return <tr key={student.id}><td><div className="person"><Avatar student={student}/><div><strong>{student.name}</strong><small>座號 {student.seat}</small></div></div></td><td><strong>{student.className}</strong><small className="cell-sub">{student.number}</small></td><td data-label="紀錄數"><span className="count">{item.total}</span></td><td data-label="待跟進">{item.pending ? <span className={item.overdue ? "todo-count overdue-text" : "todo-count"}>● {item.pending} 項{item.overdue ? `（${item.overdue} 項逾期）` : ""}</span> : <span className="muted">—</span>}</td><td className="student-row-actions"><button type="button" className="btn primary" onClick={() => onAddEntry(student.id)}>登記紀錄</button><button type="button" className="row-button" onClick={() => onOpenStudent(student.id)}>查看資料 <ChevronRight size={15}/></button></td></tr>;
     })}</tbody></table>{!shown.length && <Empty text="找不到符合條件的學生" hint="可清除條件後重新查看全部學生。" onReset={activeFilters.length ? onReset : undefined}/>}</div>
-    <div className="table-foot" aria-live="polite">顯示 {shown.length} / {totalCount} 位學生 <span>資料僅供介面示範</span></div>
+    <ListPagination page={pagination} label="學生名冊" unit="位"/>
+    <div className="list-total-note">全校 {totalCount.toLocaleString()} 位虛構學生 · 篩選不會改變學生摘要統計</div>
   </section>;
 }
 
-function RecordsDirectory({ entries, totalCount, studentMap, search, classFilter, kindFilter, categoryFilter, statusFilter, assigneeFilter, dateFrom, dateTo, dateRangeInvalid, sort, filtersOpen, activeFilters, classes, categories: recordCategories, assignees, onSearch, onClassFilterChange, onKindFilterChange, onCategoryFilterChange, onStatusFilterChange, onAssigneeFilterChange, onDateFromChange, onDateToChange, onSortChange, onFiltersOpenChange, onReset, onOpenCase, onEdit }: {
+function RecordsDirectory({ entries, totalCount, pagination, studentMap, search, classFilter, kindFilter, categoryFilter, statusFilter, assigneeFilter, dateFrom, dateTo, dateRangeInvalid, sort, filtersOpen, activeFilters, classes, categories: recordCategories, assignees, onSearch, onClassFilterChange, onKindFilterChange, onCategoryFilterChange, onStatusFilterChange, onAssigneeFilterChange, onDateFromChange, onDateToChange, onSortChange, onFiltersOpenChange, onReset, onOpenCase, onEdit }: {
   entries: Entry[];
+  pagination: ListPage;
   totalCount: number;
   studentMap: Map<string, Student>;
   search: string;
@@ -1082,10 +1161,10 @@ function RecordsDirectory({ entries, totalCount, studentMap, search, classFilter
   onOpenCase: (id: string) => void;
   onEdit: (entry: Entry) => void;
 }) {
-  const advancedCount = Number(classFilter !== "全部班級") + Number(kindFilter !== "全部類型") + Number(categoryFilter !== "全部事項") + Number(statusFilter !== "全部狀態") + Number(assigneeFilter !== ALL_ASSIGNEES) + Number(Boolean(dateFrom)) + Number(Boolean(dateTo));
+  const advancedCount = Number(categoryFilter !== "全部事項") + Number(assigneeFilter !== ALL_ASSIGNEES) + Number(Boolean(dateFrom)) + Number(Boolean(dateTo));
   return <section className="card table-card">
     <div className="table-heading">
-      <div><small>CONDUCT RECORDS</small><h2>全部紀錄 <b>{entries.length}</b></h2></div>
+      <div><small>CONDUCT RECORDS</small><h2>符合條件的紀錄 <b>{pagination.total}</b></h2></div>
       <div className="filters list-toolbar">
         <label className="search"><Search size={16}/><input aria-label="搜尋紀錄" placeholder="搜尋學生、學號或事項" value={search} onChange={(event) => onSearch(event.target.value)}/></label>
         <label className="select toolbar-select"><ArrowUpDown size={15}/><select aria-label="紀錄排序" value={sort} onChange={(event) => onSortChange(event.target.value as RecordSort)}>
@@ -1097,26 +1176,29 @@ function RecordsDirectory({ entries, totalCount, studentMap, search, classFilter
     {filtersOpen && <div className="advanced-filter-panel" id="record-advanced-filters">
       <div className="advanced-filter-head"><div><strong>篩選訓育紀錄</strong><span>所有條件會同時套用</span></div><button type="button" onClick={onReset}><RotateCcw size={14}/>重設</button></div>
       <div className="advanced-filter-grid">
-        <label className="filter-field"><span>班級</span><select value={classFilter} onChange={(event) => onClassFilterChange(event.target.value)}>{classes.map((item) => <option key={item}>{item}</option>)}</select></label>
-        <label className="filter-field"><span>紀錄類型</span><select value={kindFilter} onChange={(event) => onKindFilterChange(event.target.value)}><option>全部類型</option><optgroup label="校本範疇">{SCHOOL_CATEGORIES.map((category) => <option key={category}>{category}</option>)}</optgroup><optgroup label="舊紀錄類型"><option>嘉許</option><option>提醒</option><option>違規</option></optgroup></select></label>
+
+
         <label className="filter-field"><span>事項分類</span><select value={categoryFilter} onChange={(event) => onCategoryFilterChange(event.target.value)}>{recordCategories.map((item) => <option key={item}>{item}</option>)}</select></label>
-        <label className="filter-field"><span>個案狀態</span><select value={statusFilter} onChange={(event) => onStatusFilterChange(event.target.value)}><option>全部狀態</option><option>待跟進</option><option>跟進中</option><option>已結案</option></select></label>
+
         <label className="filter-field"><span>負責人</span><select value={assigneeFilter} onChange={(event) => onAssigneeFilterChange(event.target.value)}>{assignees.map((item) => <option value={item} key={item}>{assigneeOptionLabel(item)}</option>)}</select></label>
         <div className="date-range-group"><span>紀錄日期</span><div><label><span className="sr-only">開始日期</span><input type="date" value={dateFrom} max={dateTo || undefined} onChange={(event) => onDateFromChange(event.target.value)}/></label><i>至</i><label><span className="sr-only">結束日期</span><input type="date" value={dateTo} min={dateFrom || undefined} onChange={(event) => onDateToChange(event.target.value)}/></label></div></div>
       </div>
       {dateRangeInvalid && <p className="filter-error" role="alert">開始日期不可遲於結束日期；修正前暫不套用日期條件。</p>}
     </div>}
+    <div className="persistent-filters"><label className="filter-field"><span>班級</span><select value={classFilter} onChange={(event) => onClassFilterChange(event.target.value)}>{classes.map((item) => <option key={item}>{item}</option>)}</select></label><label className="filter-field"><span>紀錄類型</span><select value={kindFilter} onChange={(event) => onKindFilterChange(event.target.value)}><option>全部類型</option><optgroup label="校本範疇">{SCHOOL_CATEGORIES.map((category) => <option key={category}>{category}</option>)}</optgroup><optgroup label="舊紀錄類型"><option>嘉許</option><option>提醒</option><option>違規</option></optgroup></select></label><label className="filter-field"><span>個案狀態</span><select value={statusFilter} onChange={(event) => onStatusFilterChange(event.target.value)}><option>全部狀態</option><option>待跟進</option><option>跟進中</option><option>已結案</option></select></label></div>
     <FilterSummary labels={activeFilters} onReset={onReset}/>
-    <div className="table-scroll"><table className="records-table"><thead><tr><th>日期 / 學生</th><th>類型</th><th>事項</th><th>狀態</th><th>操作</th></tr></thead><tbody>{entries.map((entry) => {
+    <div className="table-scroll"><table className="records-table"><thead><tr><th>日期 / 學生</th><th>範疇</th><th>事項</th><th>實際加減分</th><th>狀態</th><th>操作</th></tr></thead><tbody>{entries.map((entry) => {
       const student = studentMap.get(entry.studentId)!;
-      return <tr key={entry.id}><td><div className="person"><Avatar student={student}/><div><strong>{student.name} <span>· {student.className}</span></strong><small>{dateLabel(entry.date)} · {student.number}</small></div></div></td><td><KindTag kind={entry.kind}/></td><td><strong>{entry.category}</strong><small className="entry-note">{entry.note}</small></td><td><StatusTag status={entry.status}/></td><td><div className="actions"><button type="button" className="row-button" onClick={() => onOpenCase(entry.id)}><ChevronRight size={15}/>詳情</button><button type="button" className="row-button" onClick={() => onEdit(entry)}><FilePenLine size={15}/>編輯</button></div></td></tr>;
+      return <tr key={entry.id}><td><div className="person"><Avatar student={student}/><div><strong>{student.name} <span>· {student.className}</span></strong><small>座號 {student.seat} · {student.number}</small><small>{dateLabel(entry.date)}</small></div></div></td><td data-label="範疇"><KindTag kind={entry.kind}/></td><td className="record-item"><strong>{entry.category}</strong><small className="entry-note">{entry.note}</small></td><td data-label="本次加減分"><strong className="actual-score">{scoreLabel(entry)}</strong></td><td data-label="狀態"><StatusTag status={entry.status}/></td><td><div className="actions"><button type="button" className="row-button" onClick={() => onOpenCase(entry.id)}><ChevronRight size={15}/>詳情</button><button type="button" className="row-button" onClick={() => onEdit(entry)}><FilePenLine size={15}/>編輯</button></div></td></tr>;
     })}</tbody></table>{!entries.length && <Empty text="沒有符合條件的紀錄" hint="可清除條件後重新查看全部紀錄。" onReset={activeFilters.length ? onReset : undefined}/>}</div>
-    <div className="table-foot" aria-live="polite">顯示 {entries.length} / {totalCount} 筆紀錄 <span>資料僅供介面示範</span></div>
+    <ListPagination page={pagination} label="獎懲紀錄"/>
+    <div className="list-total-note">全部 {totalCount.toLocaleString()} 筆紀錄 · 未記分表示舊紀錄未有分數，並非 0 分</div>
   </section>;
 }
 
-function TodoCenter({ todos, studentMap, today, scope, filter, search, sort, classFilter, kindFilter, statusFilter, assigneeFilter, filtersOpen, activeFilters, classes, assignees, openCount, completedCount, overdueCount, todayCount, unscheduledCount, onSearch, onSortChange, onClassFilterChange, onKindFilterChange, onStatusFilterChange, onAssigneeFilterChange, onFiltersOpenChange, onReset, onScopeChange, onFilterChange, onOpenCase, onStart }: {
+function TodoCenter({ todos, pagination, studentMap, today, scope, filter, search, sort, classFilter, kindFilter, statusFilter, assigneeFilter, filtersOpen, activeFilters, classes, assignees, openCount, completedCount, overdueCount, todayCount, unscheduledCount, onSearch, onSortChange, onClassFilterChange, onKindFilterChange, onStatusFilterChange, onAssigneeFilterChange, onFiltersOpenChange, onReset, onScopeChange, onFilterChange, onOpenCase, onStart }: {
   todos: Entry[];
+  pagination: ListPage;
   studentMap: Map<string, Student>;
   today: string;
   scope: TodoScope;
@@ -1152,7 +1234,7 @@ function TodoCenter({ todos, studentMap, today, scope, filter, search, sort, cla
   const filterLabels: Record<TodoFilter, string> = { all: "全部", overdue: "已逾期", today: "今日到期", next7: "未來 7 日", unscheduled: "未設期限" };
   const emptyHint = activeFilters.length ? "目前的條件沒有相符結果，可清除條件再試。" : scope === "completed" ? "完成個案結案後，會在這裡保留記錄。" : "目前沒有需要處理的個案。";
   const totalCount = scope === "open" ? openCount : completedCount;
-  const advancedCount = Number(classFilter !== "全部班級") + Number(kindFilter !== "全部類型") + Number(scope === "open" && statusFilter !== "全部狀態") + Number(assigneeFilter !== ALL_ASSIGNEES);
+  const advancedCount = Number(kindFilter !== "全部類型") + Number(scope === "open" && statusFilter !== "全部狀態") + Number(assigneeFilter !== ALL_ASSIGNEES);
 
   return <>
     <section className="todo-summary" aria-label="待辦摘要">
@@ -1180,13 +1262,14 @@ function TodoCenter({ todos, studentMap, today, scope, filter, search, sort, cla
       {filtersOpen && <div className="advanced-filter-panel" id="todo-advanced-filters">
         <div className="advanced-filter-head"><div><strong>篩選待辦個案</strong><span>所有條件會同時套用</span></div><button type="button" onClick={onReset}><RotateCcw size={14}/>重設</button></div>
         <div className="advanced-filter-grid todo-advanced-grid">
-          <label className="filter-field"><span>班級</span><select value={classFilter} onChange={(event) => onClassFilterChange(event.target.value)}>{classes.map((item) => <option key={item}>{item}</option>)}</select></label>
+
           <label className="filter-field"><span>紀錄類型</span><select value={kindFilter} onChange={(event) => onKindFilterChange(event.target.value)}><option>全部類型</option><optgroup label="校本範疇">{SCHOOL_CATEGORIES.map((category) => <option key={category}>{category}</option>)}</optgroup><optgroup label="舊紀錄類型"><option>嘉許</option><option>提醒</option><option>違規</option></optgroup></select></label>
           <label className="filter-field"><span>個案狀態</span><select value={scope === "completed" ? "全部狀態" : statusFilter} disabled={scope === "completed"} onChange={(event) => onStatusFilterChange(event.target.value)}><option>全部狀態</option><option>待跟進</option><option>跟進中</option></select></label>
           <label className="filter-field"><span>負責人</span><select value={assigneeFilter} onChange={(event) => onAssigneeFilterChange(event.target.value)}>{assignees.map((item) => <option value={item} key={item}>{assigneeOptionLabel(item)}</option>)}</select></label>
         </div>
       </div>}
-      <FilterSummary labels={activeFilters} onReset={onReset}/>
+      <div className="persistent-filters"><label className="filter-field"><span>班級</span><select value={classFilter} onChange={(event) => onClassFilterChange(event.target.value)}>{classes.map((item) => <option key={item}>{item}</option>)}</select></label></div>
+    <FilterSummary labels={activeFilters} onReset={onReset}/>
       <div className="todo-list">
         {todos.map((entry) => {
           const student = studentMap.get(entry.studentId);
@@ -1195,7 +1278,7 @@ function TodoCenter({ todos, studentMap, today, scope, filter, search, sort, cla
           const needsPlan = entry.status !== "已結案" && (!entry.assignee || !entry.dueDate);
           return <article className={"todo-item " + due.tone} key={entry.id}>
             <div className="todo-due"><span><Clock3 size={18}/></span><div><strong>{due.label}</strong><small>{due.date}</small></div></div>
-            <div className="todo-student"><Avatar student={student}/><div><strong>{student.name}</strong><span>{student.className}</span><small>學號 {student.number}</small></div></div>
+            <div className="todo-student"><Avatar student={student}/><div><strong>{student.name}</strong><span>{student.className} · 座號 {student.seat}</span><small>學號 {student.number}</small></div></div>
             <div className="todo-content"><div><KindTag kind={entry.kind}/><StatusTag status={entry.status}/></div><h3>{entry.category}</h3><p>{entry.note}</p></div>
             <div className="todo-owner"><span>負責人</span><strong className={!entry.assignee ? "missing" : ""}>{entry.assignee || "未指定"}</strong><small>最近更新 {dateLabel(latestActivityDate(entry))}</small></div>
             <div className="todo-actions">
@@ -1206,7 +1289,8 @@ function TodoCenter({ todos, studentMap, today, scope, filter, search, sort, cla
         })}
         {!todos.length && <div className="todo-empty"><CheckCircle2 size={27}/><strong>{scope === "completed" ? "沒有相符的已完成個案" : "這個清單已清空"}</strong><p>{emptyHint}</p>{activeFilters.length > 0 && <button type="button" className="btn secondary" onClick={onReset}><RotateCcw size={14}/>清除條件</button>}</div>}
       </div>
-      <div className="todo-board-foot"><ShieldCheck size={15}/><span>完成待辦時需在個案詳情填寫結案摘要，處理結果會保留在學生時間線。</span><b aria-live="polite">顯示 {todos.length} / {totalCount} 項</b></div>
+      <ListPagination page={pagination} label="待辦中心" unit="項"/>
+      <div className="todo-board-foot"><ShieldCheck size={15}/><span>完成待辦時需在個案詳情填寫結案摘要，處理結果會保留在學生時間線。</span><b>此狀態共 {totalCount.toLocaleString()} 項</b></div>
     </section>
   </>;
 }
@@ -1321,7 +1405,7 @@ function CasePanel({ entry, student, onClose, onEdit, onSavePlan, onStart, onAdd
     <section className="panel case-panel" role="dialog" aria-modal="true" aria-labelledby="case-title">
       <div className="panel-head"><div><small>CASE DETAILS / 個案跟進</small><h2 id="case-title">個案詳情</h2></div><button type="button" aria-label="關閉個案詳情" onClick={onClose}><X size={20}/></button></div>
       <div className="panel-body case-body">
-        <div className="case-person"><Avatar student={student} large/><div><h3>{student.name}</h3><p>{student.className} · 學號 {student.number}</p></div><StatusTag status={entry.status}/></div>
+        <div className="case-person"><Avatar student={student} large/><div><h3>{student.name}</h3><p>{student.className} · 座號 {student.seat} · 學號 {student.number}</p></div><StatusTag status={entry.status}/></div>
         <div className="case-steps" aria-label="個案流程">
           <button type="button" className="active" onClick={returnToRecord} title="返回建立紀錄，更正資料" aria-label="1 建立紀錄：返回更正">1 建立紀錄<FilePenLine size={14}/></button><span className={followUpSkipped ? "skipped" : entry.status !== "待跟進" ? "active" : ""} aria-current={entry.status === "跟進中" ? "step" : undefined}>{followUpSkipped ? "2 不需跟進" : "2 跟進處理"}</span><span className={isClosed ? "active" : ""} aria-current={isClosed ? "step" : undefined}>3 結案</span>
         </div>
