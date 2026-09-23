@@ -286,12 +286,12 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 @media(max-width:360px){.school-score-grid{grid-template-columns:1fr}.school-score-grid>div{display:flex;align-items:center;justify-content:space-between;padding:10px 14px}.school-score-grid dd{margin:0}}
 
 
-/* Scalable student workbench and shared list controls */
+/* Scalable student picker and shared list controls */
 body{font-size:1rem;line-height:1.5}
 .student-search{padding:24px;border:1px solid #cbded9;border-radius:14px;background:#fff}
 .student-search-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:20px}
 .student-search-heading h2{display:flex;align-items:center;gap:9px;margin:0;font-size:1.25rem;color:#174d48}
-.student-search-heading>span,.lookup-hint,.lookup-result-head p{font-size:.875rem;color:#526b73}
+.lookup-hint,.lookup-result-head p{font-size:.875rem;color:#526b73}
 .student-search-controls{display:grid;grid-template-columns:minmax(0,1fr) minmax(150px,.35fr);gap:16px}
 .student-search-controls label{display:grid;gap:7px;min-width:0;font-size:.875rem;font-weight:700}
 .student-search-controls label>div{display:flex;align-items:center;gap:10px;padding:0 12px;border:1px solid #a6bfba;border-radius:8px;background:#fff;color:#36645c}
@@ -398,12 +398,10 @@ body{font-size:1rem;line-height:1.5}
 }
 @media(max-width:720px){
   .student-search{padding:18px}
-  .student-search-heading>span{display:none}
   .student-search-controls{grid-template-columns:1fr}
   .lookup-row{align-items:flex-start;flex-direction:column;gap:12px}
   .lookup-row p span{display:block;margin:4px 0 0}
-  .lookup-actions{width:100%;display:grid;grid-template-columns:1fr 1fr}
-  .lookup-actions .btn:only-child{grid-column:1/-1}
+  .lookup-actions{width:100%;display:grid;grid-template-columns:1fr}
   .lookup-result-head{flex-wrap:wrap}
   .persistent-filters{padding:16px;gap:12px}
   .persistent-filters .filter-field{max-width:none;min-width:120px}

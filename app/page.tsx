@@ -9,7 +9,7 @@ import { completeCase, DIRECT_CLOSURE_REASON } from "../lib/case-workflow";
 import type { Student, Entry, FollowUp, Kind, LegacyKind, Status } from "../lib/conduct-types";
 import { compareTodoPriority, duplicateStudentIds, matchesStudent, normalizeSearch, recordSearchText, scoreLabel, studentSearchRank, toggleSelection } from "../lib/list-tools";
 import { ListPagination, useListPage, type ListPage } from "../components/list-pagination";
-import { StudentPicker, StudentSearch } from "../components/student-picker";
+import { StudentPicker } from "../components/student-picker";
 
 type Page = "dashboard" | "todos" | "students" | "records";
 type TodoScope = "open" | "completed";
@@ -136,9 +136,6 @@ export default function Home() {
 
 function Workspace({ students, initialEntries, largeFixture }: { students: Student[]; initialEntries: Entry[]; largeFixture: boolean }) {
   const [page, setPage] = useState<Page>("dashboard");
-  const [lookupQuery, setLookupQuery] = useState("");
-  const [lookupClass, setLookupClass] = useState("全部班級");
-  const lookupInputRef = useRef<HTMLInputElement>(null);
   const [entries, setEntries] = useState<Entry[]>(initialEntries);
   const [studentSearch, setStudentSearch] = useState("");
   const [studentClassFilter, setStudentClassFilter] = useState("全部班級");
@@ -232,8 +229,7 @@ function Workspace({ students, initialEntries, largeFixture }: { students: Stude
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
         event.preventDefault();
         if (formOpen || batchFormOpen || studentId || caseId) return;
-        if (page === "dashboard") lookupInputRef.current?.focus();
-        else { setGlobalSearchOpen(true); globalSearchInputRef.current?.focus(); }
+        setGlobalSearchOpen(true); globalSearchInputRef.current?.focus();
       }
     };
     const closeWhenOutside = (event: PointerEvent) => {
@@ -245,7 +241,7 @@ function Workspace({ students, initialEntries, largeFixture }: { students: Stude
       window.removeEventListener("keydown", openWithShortcut);
       window.removeEventListener("pointerdown", closeWhenOutside);
     };
-  }, [page, formOpen, batchFormOpen, studentId, caseId]);
+  }, [formOpen, batchFormOpen, studentId, caseId]);
 
   const modalOpen = formOpen || batchFormOpen || !!studentId || !!caseId;
   useEffect(() => {
@@ -634,7 +630,7 @@ function Workspace({ students, initialEntries, largeFixture }: { students: Stude
   }
   const titles: Record<Page, string> = { dashboard: "訓育工作台", todos: "待辦中心", students: "學生名冊", records: "獎懲紀錄" };
   const subtitles: Record<Page, string> = {
-    dashboard: "先找學生，再登記與核對。所有操作只使用虛構示範資料。",
+    dashboard: "查看最近紀錄及優先待辦。所有操作只使用虛構示範資料。",
     todos: "按期限處理未結案個案，並追蹤每項跟進安排。",
     students: "查看學生資料與個別訓育紀錄。",
     records: "集中查閱、篩選及更新訓育事項。",
@@ -653,7 +649,7 @@ function Workspace({ students, initialEntries, largeFixture }: { students: Stude
     </aside>
     {menuOpen && <button type="button" className="scrim" aria-label="關閉選單" onClick={() => setMenuOpen(false)}/>}
     <div className="main" inert={modalOpen}>
-      <header className="topbar"><button type="button" className="mobile-menu" aria-label="開啟選單" onClick={() => setMenuOpen(true)}><Menu size={21}/></button><div className="crumb">校園管理 <ChevronRight size={14}/> <strong>{title}</strong></div>{page !== "dashboard" && <GlobalSearch
+      <header className="topbar"><button type="button" className="mobile-menu" aria-label="開啟選單" onClick={() => setMenuOpen(true)}><Menu size={21}/></button><div className="crumb">校園管理 <ChevronRight size={14}/> <strong>{title}</strong></div><GlobalSearch
         query={globalSearch}
         open={globalSearchOpen}
         results={globalResults}
@@ -670,7 +666,7 @@ function Workspace({ students, initialEntries, largeFixture }: { students: Stude
         onActiveIndexChange={setGlobalSearchActiveIndex}
         onSelect={selectGlobalSearchResult}
         onKeyDown={handleGlobalSearchKeyDown}
-      />}<div className="top-meta"><span><CalendarDays size={15}/> 2026–27 學年</span><b><i/> 示範版</b></div></header>
+      /><div className="top-meta"><span><CalendarDays size={15}/> 2026–27 學年</span><b><i/> 示範版</b></div></header>
       <main className="content">
         {largeFixture && <p className="fixture-banner" role="status">大量資料測試 · 840 位虛構學生 / 5,000 筆初始紀錄 · 班級配置只供測試 · 重新整理重置</p>}
         <div className="page-heading">
@@ -681,8 +677,6 @@ function Workspace({ students, initialEntries, largeFixture }: { students: Stude
           </div>}
         </div>
         {page === "dashboard" && <>
-          <StudentSearch mode="workbench" students={students} query={lookupQuery} className={lookupClass} onQuery={setLookupQuery} onClass={setLookupClass}
-            inputRef={lookupInputRef} onSelect={addEntry} onDetails={setStudentId} onViewAll={() => showStudentResults(lookupQuery, lookupClass)}/>
           <div className="dashboard-grid">
             <section className="card list-card"><div className="card-heading"><div><small>最新動態</small><h2>最近 5 筆紀錄</h2></div><button type="button" onClick={() => { resetRecordFilters(); setRecordSort("date-desc"); recordPage.onPage(1); navigate("records"); }}>全部紀錄 <ArrowRight size={15}/></button></div>
               {[...entries].sort((a,b) => b.date.localeCompare(a.date)).slice(0,5).map(entry => { const student = studentMap.get(entry.studentId)!; return <button type="button" className="activity" key={entry.id} onClick={() => openCase(entry.id)}>
