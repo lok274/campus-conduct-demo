@@ -300,12 +300,13 @@ body{font-size:1rem;line-height:1.5}
 .student-search-controls select{width:100%;height:50px;border:1px solid #a6bfba;border-radius:8px;padding:0 10px;background:#fff;color:var(--ink);font-size:1rem}
 .lookup-hint{margin:22px 0 0;padding:14px;border-radius:8px;background:#f1f7f5;line-height:1.8}
 .lookup-result-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:18px}
-.lookup-row{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:16px 0;border-top:1px solid var(--line)}
-.lookup-row strong{font-size:1rem;color:#17313c}
-.lookup-row p{margin:5px 0 0;font-size:.875rem;color:#42616a}
-.lookup-row p span{display:inline-block;margin-left:16px;font-variant-numeric:tabular-nums}
-.lookup-actions{display:flex;align-items:center;gap:8px;flex-shrink:0}
-.lookup-actions .btn{font-size:.875rem}
+.lookup-results{display:grid;gap:12px}
+.lookup-class-group{display:grid;gap:4px}
+.lookup-class-group h3{margin:0;padding:7px 2px 3px;color:#2f635d;font-size:.875rem;font-weight:800}
+.lookup-name-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(128px,1fr));gap:0 8px;margin:0;padding:0;border-top:1px solid var(--line);list-style:none}
+.lookup-name-list li{min-width:0;border-bottom:1px solid var(--line)}
+.lookup-name-item{width:100%;min-height:40px;padding:7px 4px;border:0;border-radius:0;background:transparent;color:#17313c;font-size:1rem;font-weight:700;text-align:left;cursor:pointer}
+.lookup-name-item:hover{background:#eef7f4;color:#087872}.lookup-name-item:active{background:#dfefeb}
 .student-picker{margin-bottom:24px}
 .student-picker .student-search{padding:16px}
 .selected-student{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:18px;border:1px solid #acd1c6;border-left:4px solid #0c7774;border-radius:10px;background:#edf7f3;margin-bottom:12px}
@@ -388,9 +389,6 @@ body{font-size:1rem;line-height:1.5}
 @media(max-width:720px){
   .student-search{padding:18px}
   .student-search-controls{grid-template-columns:1fr}
-  .lookup-row{align-items:flex-start;flex-direction:column;gap:12px}
-  .lookup-row p span{display:block;margin:4px 0 0}
-  .lookup-actions{width:100%;display:grid;grid-template-columns:1fr}
   .lookup-result-head{flex-wrap:wrap}
   .persistent-filters{padding:16px;gap:12px}
   .persistent-filters .filter-field{max-width:none;min-width:120px}

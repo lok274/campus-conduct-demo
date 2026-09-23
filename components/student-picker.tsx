@@ -21,6 +21,12 @@ function StudentSearch({ students, query, className, onQuery, onClass, onSelect 
     .sort((a, b) => studentSearchRank(a, query) - studentSearchRank(b, query) ||
       classes.indexOf(a.className) - classes.indexOf(b.className) || Number(a.seat) - Number(b.seat)) : [], [students, query, className, active, classes]);
   const pagination = useListPage(matches, JSON.stringify([query, className]));
+  const pageGroups = [...pagination.items.reduce((groups, student) => {
+    const group = groups.get(student.className) ?? [];
+    group.push(student);
+    groups.set(student.className, group);
+    return groups;
+  }, new Map<string, Student[]>())];
   return <section className="student-search" aria-label="搜尋並選擇學生">
     <div className="student-search-heading"><h2><UsersRound size={21}/>搜尋並選擇學生</h2></div>
     <div className="student-search-controls">
@@ -29,10 +35,12 @@ function StudentSearch({ students, query, className, onQuery, onClass, onSelect 
     </div>
     {!active ? <p className="lookup-hint">輸入姓名、學號或選擇班級後，即可查看學生；不會預先選中任何人。</p> : <>
       <div className="lookup-result-head"><p role="status">找到 <strong>{matches.length}</strong> 位學生</p></div>
-      <div className="lookup-results">{pagination.items.map(student => <div className="lookup-row" key={student.id}>
-        <div><strong>{student.name}</strong><p>{student.className} · 座號 {student.seat}<span>學號 {student.number}</span></p></div>
-        <div className="lookup-actions"><button type="button" className="btn primary" onClick={() => onSelect(student.id)} aria-label={"選擇" + student.name + " " + student.number}>選擇學生</button></div>
-      </div>)}</div>
+      <div className="lookup-results">{pageGroups.map(([groupClass, groupStudents]) => <section className="lookup-class-group" key={groupClass} aria-labelledby={`student-group-${groupClass}`}>
+        <h3 id={`student-group-${groupClass}`}>{groupClass}</h3>
+        <ul className="lookup-name-list">{groupStudents.map(student => <li key={student.id}>
+          <button type="button" className="lookup-name-item" onClick={() => onSelect(student.id)} aria-label={`選擇 ${student.name}，${student.className}，學號 ${student.number}`}>{student.name}</button>
+        </li>)}</ul>
+      </section>)}</div>
       {!matches.length && <p className="lookup-hint">找不到符合條件的學生。請核對學號或更改班級。</p>}
       <ListPagination page={pagination} label="選擇學生" unit="位"/>
     </>}
@@ -48,6 +56,6 @@ export function StudentPicker({ students, value, onChange }: { students: Student
     {choosing && <StudentSearch students={students} query={query} className={className} onQuery={setQuery}
       onClass={next => { setClassName(next); onChange(""); }}
       onSelect={id => { onChange(id); setChoosing(false); }} />}
-    {!selected && <p className="selection-required">尚未選擇學生：請點「選擇學生」，核對身分後才可儲存。</p>}
+    {!selected && <p className="selection-required">尚未選擇學生：請點選名單內的學生姓名，核對身分後才可儲存。</p>}
   </div>;
 }
