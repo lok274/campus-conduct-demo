@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { performance } from "node:perf_hooks";
 import { createLargeSchool } from "./fixtures/large-school.ts";
-import { matchesStudent, normalizeSearch, recordSearchText, compareTodoPriority, pageWindow, toggleSelection, duplicateStudentIds, scoreLabel, studentSearchRank } from "../lib/list-tools.ts";
+import { matchesStudent, normalizeSearch, recordSearchText, pageWindow, toggleSelection, duplicateStudentIds, scoreLabel, studentSearchRank } from "../lib/list-tools.ts";
 import { completeCase } from "../lib/case-workflow.ts";
 
 const { students, entries } = createLargeSchool();
@@ -55,10 +55,6 @@ test("duplicate detection checks whole dataset, preserves zero and rule scope", 
   assert.deepEqual([...found],[students[839].id]);
   assert.equal(duplicateStudentIds(all,{...expected,scoreChange:-1}).size,0);
   assert.equal(duplicateStudentIds(all,{...expected,rule:{...expected.rule,category:"勤學"}}).size,0);
-});
-test("todo order: overdue, today, unscheduled, future", () => {
-  const cases=[{id:"future",dueDate:"2026-09-25"},{id:"unscheduled"},{id:"today",dueDate:"2026-09-22"},{id:"overdue",dueDate:"2026-09-20"}].map(e=>({...e,date:"2026-09-18"}));
-  assert.deepEqual(cases.sort((a,b)=>compareTodoPriority(a,b,"2026-09-22")).map(e=>e.id),["overdue","today","unscheduled","future"]);
 });
 test("global and full record search use the same fields", () => {
   const entry=entries[0], student=students[0];

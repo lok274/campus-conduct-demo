@@ -15,10 +15,6 @@ export function recordSearchText(entry: Entry, student?: Student) {
   return normalizeSearch([student?.name, student?.className, student?.number, entry.kind, entry.category,
     entry.note, entry.assignee, entry.date, entry.status, rule?.category, rule?.subCategory, rule?.code, rule?.itemName].join(" "));
 }
-export function compareTodoPriority(a: Entry, b: Entry, today: string) {
-  const rank = (entry: Entry) => !entry.dueDate ? 2 : entry.dueDate < today ? 0 : entry.dueDate === today ? 1 : 3;
-  return rank(a) - rank(b) || (a.dueDate ?? "").localeCompare(b.dueDate ?? "") || a.date.localeCompare(b.date) || a.id.localeCompare(b.id);
-}
 export function pageWindow(total: number, requestedPage: number, pageSize: number) {
   const pages = Math.max(1, Math.ceil(total / pageSize));
   const page = Math.max(1, Math.min(requestedPage, pages));
