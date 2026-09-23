@@ -22,8 +22,8 @@ type TimelineEvent = {
   kind: Kind; category: string; detail: string; status: Status; author?: string;
 };
 type Draft = Pick<Entry, "studentId" | "kind" | "category" | "date" | "note" | "status"> & RuleInput & { needsFollowUp: boolean };
-type BatchDraft = Pick<Entry, "kind" | "category" | "date" | "note"> & RuleInput & { needsFollowUp: boolean; assignee: string; dueDate: string };
-type BatchStep = "students" | "details" | "review";
+type CreateDraft = Pick<Entry, "kind" | "category" | "date" | "note"> & RuleInput & { needsFollowUp: boolean; assignee: string; dueDate: string };
+type CreateStep = "students" | "details" | "review";
 type GlobalSearchResult = {
   id: string;
   type: "student" | "record";
@@ -66,8 +66,8 @@ const newDraft = (): Draft => ({
   studentId: "", kind: "嘉許", category: "服務精神",
   date: currentLocalDate(), note: "", status: "待跟進", needsFollowUp: true, code: "", schoolCategory: "", subCategory: "",
 });
-const newBatchDraft = (): BatchDraft => ({
-  kind: "嘉許", category: "服務精神", date: currentLocalDate(), note: "", needsFollowUp: false, assignee: "", dueDate: "", code: "", schoolCategory: "", subCategory: "",
+const newCreateDraft = (): CreateDraft => ({
+  kind: "嘉許", category: "服務精神", date: currentLocalDate(), note: "", needsFollowUp: true, assignee: "", dueDate: "", code: "", schoolCategory: "", subCategory: "",
 });
 const dateLabel = (date: string) => date.replaceAll("-", "/");
 const assigneeOptionLabel = (value: string) => value === ALL_ASSIGNEES ? "全部負責人" : value === UNASSIGNED ? "未指定" : value;
@@ -166,8 +166,8 @@ function Workspace({ students, initialEntries, largeFixture }: { students: Stude
   const [formReturnCaseId, setFormReturnCaseId] = useState<string | null>(null);
   const [draft, setDraft] = useState<Draft>(newDraft);
   const [batchFormOpen, setBatchFormOpen] = useState(false);
-  const [batchStep, setBatchStep] = useState<BatchStep>("students");
-  const [batchDraft, setBatchDraft] = useState<BatchDraft>(newBatchDraft);
+  const [batchStep, setBatchStep] = useState<CreateStep>("students");
+  const [batchDraft, setBatchDraft] = useState<CreateDraft>(newCreateDraft);
   const [batchStudentIds, setBatchStudentIds] = useState<string[]>([]);
   const [batchClassFilter, setBatchClassFilter] = useState("全部班級");
   const [batchSearch, setBatchSearch] = useState("");
@@ -176,11 +176,11 @@ function Workspace({ students, initialEntries, largeFixture }: { students: Stude
   const [undoBatch, setUndoBatch] = useState<{ id: string; count: number } | null>(null);
   const [notice, setNotice] = useState("");
   const [today, setToday] = useState(currentLocalDate);
-  const batchButtonRef = useRef<HTMLButtonElement>(null);
+  const createButtonRef = useRef<HTMLButtonElement>(null);
   const globalSearchRef = useRef<HTMLDivElement>(null);
   const globalSearchInputRef = useRef<HTMLInputElement>(null);
   const batchHasChanges = batchStudentIds.length > 0 || !!batchDraft.code || !!batchDraft.schoolCategory || batchDraft.note.trim() !== "" || batchDraft.kind !== "嘉許" ||
-    batchDraft.category !== "服務精神" || batchDraft.date !== today || batchDraft.needsFollowUp ||
+    batchDraft.category !== "服務精神" || batchDraft.date !== today || !batchDraft.needsFollowUp ||
     batchDraft.assignee.trim() !== "" || batchDraft.dueDate !== "";
 
   useEffect(() => {
@@ -203,9 +203,9 @@ function Workspace({ students, initialEntries, largeFixture }: { students: Stude
     const close = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         if (batchFormOpen) {
-          if (!batchHasChanges || window.confirm("尚未建立的批次內容會被清除，確定離開？")) {
+          if (!batchHasChanges || window.confirm("尚未建立的內容會被清除，確定離開？")) {
             setBatchFormOpen(false); setBatchStep("students"); setBatchError("");
-            window.setTimeout(() => batchButtonRef.current?.focus(), 0);
+            window.setTimeout(() => createButtonRef.current?.focus(), 0);
           }
         }
         else if (formOpen) { setFormOpen(false); if (formReturnCaseId) setCaseId(formReturnCaseId); setFormReturnCaseId(null); }
@@ -429,35 +429,30 @@ function Workspace({ students, initialEntries, largeFixture }: { students: Stude
       closeGlobalSearch();
     }
   }
-  function addEntry() {
-    setEditingId(null); setFormReturnCaseId(null); setDraft({ ...newDraft(), studentId: "" });
-    setEntryError("");
-    setStudentId(null); setCaseId(null); setCaseReturnStudentId(null); setBatchFormOpen(false); setFormOpen(true);
-  }
-  function openBatchForm() {
+  function openCreateForm() {
     setFormReturnCaseId(null);
-    setBatchDraft(newBatchDraft()); setBatchStudentIds([]); setBatchClassFilter("全部班級"); setBatchSearch("");
+    setBatchDraft(newCreateDraft()); setBatchStudentIds([]); setBatchClassFilter("全部班級"); setBatchSearch("");
     setBatchSkipDuplicates(true); setBatchError(""); setBatchStep("students");
     setStudentId(null); setCaseId(null); setCaseReturnStudentId(null); setFormOpen(false); setBatchFormOpen(true);
   }
-  function closeBatchForm(skipConfirmation = false) {
-    if (!skipConfirmation && batchHasChanges && !window.confirm("尚未建立的批次內容會被清除，確定離開？")) return;
+  function closeCreateForm(skipConfirmation = false) {
+    if (!skipConfirmation && batchHasChanges && !window.confirm("尚未建立的內容會被清除，確定離開？")) return;
     setBatchFormOpen(false); setBatchStep("students"); setBatchError("");
-    window.setTimeout(() => batchButtonRef.current?.focus(), 0);
+    window.setTimeout(() => createButtonRef.current?.focus(), 0);
   }
-  function toggleBatchStudent(id: string) {
+  function toggleCreateStudent(id: string) {
     setBatchStudentIds((current) => current.includes(id) ? current.filter((studentId) => studentId !== id) : [...current, id]);
     setBatchError("");
   }
-  function toggleVisibleBatchStudents() {
+  function toggleVisibleCreateStudents() {
     setBatchStudentIds(current => toggleSelection(current, batchPage.items));
     setBatchError("");
   }
-  function goToBatchDetails() {
+  function goToCreateDetails() {
     if (!batchSelectedStudents.length) { setBatchError("請至少選擇 1 位學生。"); return; }
     setBatchError(""); setBatchStep("details");
   }
-  function reviewBatchEntries(event: FormEvent<HTMLFormElement>) {
+  function reviewCreateEntries(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!batchSelectedStudents.length) { setBatchError("學生名單已失效，請返回重新選擇。"); setBatchStep("students"); return; }
     if (batchRule.error || !batchRule.rule) { setBatchError(batchRule.error || "請選擇或輸入有效的 Code。"); return; }
@@ -466,7 +461,7 @@ function Workspace({ students, initialEntries, largeFixture }: { students: Stude
     if (batchDraft.needsFollowUp && batchDraft.dueDate && batchDraft.dueDate < batchDraft.date) { setBatchError("跟進期限不可早於紀錄日期。"); return; }
     setBatchError(""); setBatchStep("review");
   }
-  function confirmBatchEntries() {
+  function confirmCreateEntries() {
     const { rule, scoreChange, error } = resolveRuleSelection(batchDraft);
     if (error || !rule) { setBatchError(error || "請選擇或輸入有效的 Code。"); setBatchStep("details"); return; }
     if (!batchStudentsToCreate.length) { setBatchError("所選學生已有完全相同的紀錄；請返回修改，或取消略過重複紀錄。"); return; }
@@ -474,7 +469,7 @@ function Workspace({ students, initialEntries, largeFixture }: { students: Stude
     const createdAtIso = new Date(createdAt).toISOString();
     const batchId = "b" + createdAt;
     const note = batchDraft.note.trim();
-    const closureSummary = "此紀錄在批次建立時標記為不需跟進。";
+    const closureSummary = "此紀錄建立時標記為不需跟進。";
     const createdEntries: Entry[] = batchStudentsToCreate.map((student, index) => ({
       id: `${batchId}-${index + 1}`,
       batchId,
@@ -495,13 +490,13 @@ function Workspace({ students, initialEntries, largeFixture }: { students: Stude
     }));
     setEntries((current) => [...createdEntries, ...current]);
     setUndoBatch({ id: batchId, count: createdEntries.length });
-    setNotice(`已建立 ${createdEntries.length} 筆批次紀錄`);
-    closeBatchForm(true); resetRecordFilters(); setRecordSort("date-desc"); navigate("records");
+    setNotice(`已建立 ${createdEntries.length} 筆訓育紀錄`);
+    closeCreateForm(true); resetRecordFilters(); setRecordSort("date-desc"); navigate("records");
   }
   function undoLastBatch() {
     if (!undoBatch) return;
     setEntries((current) => current.filter((entry) => entry.batchId !== undoBatch.id));
-    setNotice(`已復原 ${undoBatch.count} 筆批次紀錄`); setUndoBatch(null);
+    setNotice(`已復原 ${undoBatch.count} 筆訓育紀錄`); setUndoBatch(null);
   }
   function editEntry(entry: Entry) {
     setEditingId(entry.id);
@@ -518,6 +513,7 @@ function Workspace({ students, initialEntries, largeFixture }: { students: Stude
   }
   function saveEntry(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (!editingId) return;
     if (!studentMap.has(draft.studentId)) { setEntryError("請先明確選擇學生並核對身分。"); return; }
     if (!draft.date || !draft.category || !draft.note.trim()) return;
     if (draft.date > today) { setEntryError("紀錄日期不可遲於今天。"); return; }
@@ -529,21 +525,13 @@ function Workspace({ students, initialEntries, largeFixture }: { students: Stude
       ...(rule ? ruleRecordFields(rule, scoreChange) : {}),
     };
     const now = new Date();
-    if (editingId) {
-      setEntries((current) => current.map((e) => {
-        if (e.id !== editingId) return e;
-        const corrected = { ...e, ...savedDraft, status: e.status };
-        return draft.needsFollowUp ? corrected : completeCase(corrected, DIRECT_CLOSURE_REASON, now, true);
-      }));
-      setNotice(!draft.needsFollowUp && draft.status !== "已結案" ? "紀錄已更正並直接完結" : "紀錄已更新，原有跟進記錄已保留");
-      if (formReturnCaseId) setCaseId(formReturnCaseId);
-    } else {
-      const id = "r" + now.getTime();
-      const created: Entry = { ...savedDraft, id };
-      setEntries((current) => [draft.needsFollowUp ? created : completeCase(created, DIRECT_CLOSURE_REASON, now, true), ...current]);
-      setCaseId(id);
-      setNotice(draft.needsFollowUp ? "新紀錄已加入" : "新紀錄已建立並直接完結");
-    }
+    setEntries((current) => current.map((e) => {
+      if (e.id !== editingId) return e;
+      const corrected = { ...e, ...savedDraft, status: e.status };
+      return draft.needsFollowUp ? corrected : completeCase(corrected, DIRECT_CLOSURE_REASON, now, true);
+    }));
+    setNotice(!draft.needsFollowUp && draft.status !== "已結案" ? "紀錄已更正並直接完結" : "紀錄已更新，原有跟進記錄已保留");
+    if (formReturnCaseId) setCaseId(formReturnCaseId);
     setFormOpen(false); setFormReturnCaseId(null);
   }
   function openCase(id: string) {
@@ -626,8 +614,7 @@ function Workspace({ students, initialEntries, largeFixture }: { students: Stude
         <div className="page-heading">
           <div><small>STUDENT AFFAIRS / 訓育管理</small><h1>{title}</h1><p>{subtitle}</p></div>
           {page === "dashboard" && <div className="page-actions">
-            <button ref={batchButtonRef} type="button" className="btn secondary" onClick={openBatchForm}><UsersRound size={17}/>批次建立</button>
-            <button type="button" className="btn primary" onClick={() => addEntry()}><Plus size={17}/>新增紀錄</button>
+            <button ref={createButtonRef} type="button" className="btn primary" onClick={openCreateForm}><Plus size={17}/>新增紀錄</button>
           </div>}
         </div>
         {page === "todos" && <TodoCenter
@@ -705,7 +692,7 @@ function Workspace({ students, initialEntries, largeFixture }: { students: Stude
     {selected && <div className="overlay" onMouseDown={(e) => { if (e.target === e.currentTarget) setStudentId(null); }}><section className="panel" role="dialog" aria-modal="true" aria-labelledby="student-title"><div className="panel-head"><div><small>STUDENT PROFILE</small><h2 id="student-title">學生資料</h2></div><button type="button" aria-label="關閉學生資料" onClick={() => setStudentId(null)}><X size={20}/></button></div><div className="panel-body"><div className="profile"><Avatar student={selected} large/><div><h3>{selected.name}</h3><p>{selected.className} · 座號 {selected.seat}</p></div></div><div className="profile-facts"><div><span>學號</span><strong>{selected.number}</strong></div><div><span>班級</span><strong>{selected.className}</strong></div><div><span>紀錄總數</span><strong>{selectedEntries.length} 筆</strong></div></div><StudentOverview entries={selectedEntries} today={today} onOpenCase={openCase}/><h3 className="block-title">個人紀錄時間線 <span>{selectedTimeline.length} 項事件</span></h3><p className="timeline-intro">按日期查看紀錄、跟進與結案；紀錄總數指個案數目。</p><StudentTimeline events={selectedTimeline} onOpenCase={openCase}/></div></section></div>}
     {formOpen && <div className="overlay" onMouseDown={(e) => { if (e.target === e.currentTarget) closeEntryForm(); }}>
       <section className="panel" role="dialog" aria-modal="true" aria-labelledby="form-title">
-        <div className="panel-head"><div><small>CONDUCT RECORD</small><h2 id="form-title">{formReturnCaseId ? "1 建立紀錄 · 更正資料" : editingId ? "編輯訓育紀錄" : "新增訓育紀錄"}</h2></div><button type="button" aria-label="關閉表單" onClick={closeEntryForm}><X size={20}/></button></div>
+        <div className="panel-head"><div><small>CONDUCT RECORD</small><h2 id="form-title">{formReturnCaseId ? "1 建立紀錄 · 更正資料" : "編輯訓育紀錄"}</h2></div><button type="button" aria-label="關閉表單" onClick={closeEntryForm}><X size={20}/></button></div>
         <form className="entry-form" onSubmit={saveEntry}><div className="panel-body">
           <p className="form-intro">選擇校本事項 Code，再填寫事件內容及日期。</p>
           {formReturnCaseId && <p className="case-edit-hint">儲存後會返回原個案；已有的跟進安排及記錄會保留。</p>}
@@ -723,10 +710,10 @@ function Workspace({ students, initialEntries, largeFixture }: { students: Stude
           </div></fieldset> : <p className="case-edit-hint">此個案已結案，更正資料不會重新開啟跟進。</p>}
           {entryError && <p className="rule-error" role="alert">{entryError}</p>}
           <p className="form-warning"><ShieldCheck size={16}/>這是前端示範版。資料只會在目前頁面暫時顯示。</p>
-        </div><div className="panel-foot entry-form-actions"><button type="button" className="btn secondary" onClick={closeEntryForm}>{formReturnCaseId ? "取消並返回個案" : "取消"}</button><button type="submit" className="btn primary" disabled={!draftStudent || !!draftRule.error || (draftCodeRequired && !draftRule.rule)}><Check size={17}/>{!draft.needsFollowUp && draft.status !== "已結案" ? editingId ? "儲存並完結" : "建立並完結" : formReturnCaseId ? "儲存更正並返回" : editingId ? "儲存變更" : "建立紀錄"}</button></div></form>
+        </div><div className="panel-foot entry-form-actions"><button type="button" className="btn secondary" onClick={closeEntryForm}>{formReturnCaseId ? "取消並返回個案" : "取消"}</button><button type="submit" className="btn primary" disabled={!draftStudent || !!draftRule.error || (draftCodeRequired && !draftRule.rule)}><Check size={17}/>{!draft.needsFollowUp && draft.status !== "已結案" ? "儲存並完結" : formReturnCaseId ? "儲存更正並返回" : "儲存變更"}</button></div></form>
       </section>
     </div>}
-    {batchFormOpen && <BatchRecordPanel
+    {batchFormOpen && <CreateRecordPanel
       step={batchStep}
       draft={batchDraft}
       visibleStudents={batchPage.items}
@@ -742,21 +729,21 @@ function Workspace({ students, initialEntries, largeFixture }: { students: Stude
       createCount={batchStudentsToCreate.length}
       error={batchError}
       today={today}
-      onClose={() => closeBatchForm()}
+      onClose={() => closeCreateForm()}
       onStepChange={(next) => { setBatchError(""); setBatchStep(next); }}
       onClassFilterChange={setBatchClassFilter}
       onSearch={setBatchSearch}
-      onToggleStudent={toggleBatchStudent}
-      onToggleVisible={toggleVisibleBatchStudents}
+      onToggleStudent={toggleCreateStudent}
+      onToggleVisible={toggleVisibleCreateStudents}
       onClearSelection={() => { setBatchStudentIds([]); setBatchError(""); }}
       onDraftChange={(patch) => { setBatchDraft((current) => ({ ...current, ...patch })); setBatchError(""); }}
       onSkipDuplicatesChange={setBatchSkipDuplicates}
-      onNextStudents={goToBatchDetails}
-      onSubmitDetails={reviewBatchEntries}
-      onConfirm={confirmBatchEntries}
+      onNextStudents={goToCreateDetails}
+      onSubmitDetails={reviewCreateEntries}
+      onConfirm={confirmCreateEntries}
     />}
     {selectedCase && caseStudent && <CasePanel key={selectedCase.id} entry={selectedCase} student={caseStudent} onClose={closeCaseView} onEdit={() => editEntry(selectedCase)} onSavePlan={saveCasePlan} onStart={startCase} onAddFollowUp={addFollowUp} onCloseCase={closeCase} onReopen={reopenCase}/>}
-    {notice && <div className="toast" role="status"><CheckCircle2 size={18}/>{notice}{undoBatch && notice === `已建立 ${undoBatch.count} 筆批次紀錄` && <button type="button" className="toast-action" onClick={undoLastBatch}>復原</button>}<button type="button" aria-label="關閉通知" onClick={() => { setNotice(""); setUndoBatch(null); }}><X size={14}/></button></div>}
+    {notice && <div className="toast" role="status"><CheckCircle2 size={18}/>{notice}{undoBatch && notice === `已建立 ${undoBatch.count} 筆訓育紀錄` && <button type="button" className="toast-action" onClick={undoLastBatch}>復原</button>}<button type="button" aria-label="關閉通知" onClick={() => { setNotice(""); setUndoBatch(null); }}><X size={14}/></button></div>}
   </div>;
 }
 
@@ -826,9 +813,9 @@ function GlobalSearch({
   </div>;
 }
 
-type BatchRecordPanelProps = {
-  step: BatchStep;
-  draft: BatchDraft;
+type CreateRecordPanelProps = {
+  step: CreateStep;
+  draft: CreateDraft;
   visibleStudents: Student[];
   pagination: ListPage;
   selectedStudents: Student[];
@@ -843,27 +830,27 @@ type BatchRecordPanelProps = {
   error: string;
   today: string;
   onClose: () => void;
-  onStepChange: (step: BatchStep) => void;
+  onStepChange: (step: CreateStep) => void;
   onClassFilterChange: (value: string) => void;
   onSearch: (value: string) => void;
   onToggleStudent: (id: string) => void;
   onToggleVisible: () => void;
   onClearSelection: () => void;
-  onDraftChange: (patch: Partial<BatchDraft>) => void;
+  onDraftChange: (patch: Partial<CreateDraft>) => void;
   onSkipDuplicatesChange: (value: boolean) => void;
   onNextStudents: () => void;
   onSubmitDetails: (event: FormEvent<HTMLFormElement>) => void;
   onConfirm: () => void;
 };
 
-function BatchRecordPanel({
+function CreateRecordPanel({
   step, draft, visibleStudents, selectedStudents, selectedIds, duplicateIds, allVisibleSelected, pagination,
   classFilter, search, classes, skipDuplicates, createCount, error, today, onClose, onStepChange,
   onClassFilterChange, onSearch, onToggleStudent, onToggleVisible, onClearSelection, onDraftChange,
   onSkipDuplicatesChange, onNextStudents, onSubmitDetails, onConfirm,
-}: BatchRecordPanelProps) {
+}: CreateRecordPanelProps) {
   const stepContentRef = useRef<HTMLDivElement>(null);
-  const steps: { id: BatchStep; label: string }[] = [
+  const steps: { id: CreateStep; label: string }[] = [
     { id: "students", label: "選擇學生" },
     { id: "details", label: "填寫內容" },
     { id: "review", label: "核對建立" },
@@ -873,6 +860,12 @@ function BatchRecordPanel({
   const duplicateCount = duplicateIds.size;
   const displayedSelected = selectedStudents.slice(0, 6);
   const selectedRule = resolveRuleSelection(draft);
+  const visibleGroups = [...visibleStudents.reduce((groups, student) => {
+    const group = groups.get(student.className) ?? [];
+    group.push(student);
+    groups.set(student.className, group);
+    return groups;
+  }, new Map<string, Student[]>())];
   useEffect(() => {
     if (step !== "students") stepContentRef.current?.focus();
   }, [step]);
@@ -888,44 +881,45 @@ function BatchRecordPanel({
 
   return <div className="overlay" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
     <section className="panel batch-panel" role="dialog" aria-modal="true" aria-labelledby="batch-form-title" onKeyDown={trapDialogFocus}>
-      <div className="panel-head"><div><small>BATCH RECORDS</small><h2 id="batch-form-title">批次建立訓育紀錄</h2></div><button type="button" aria-label="關閉批次建立" onClick={onClose}><X size={20}/></button></div>
-      <div className="batch-steps" aria-label="批次建立步驟">{steps.map((item, index) => <div key={item.id} className={(index === stepIndex ? "active" : "") + (index < stepIndex ? " done" : "")}><b>{index < stepIndex ? <Check size={13}/> : index + 1}</b><span>{item.label}</span></div>)}</div>
+      <div className="panel-head"><div><small>CONDUCT RECORD</small><h2 id="batch-form-title">新增訓育紀錄</h2></div><button type="button" aria-label="關閉新增訓育紀錄" onClick={onClose}><X size={20}/></button></div>
+      <div className="batch-steps" aria-label="新增訓育紀錄步驟">{steps.map((item, index) => <div key={item.id} className={(index === stepIndex ? "active" : "") + (index < stepIndex ? " done" : "")}><b>{index < stepIndex ? <Check size={13}/> : index + 1}</b><span>{item.label}</span></div>)}</div>
 
       {step === "students" && <div className="entry-form">
         <div className="panel-body batch-body" ref={stepContentRef}>
-          <p className="form-intro">先選擇需要加入同一事項的學生。切換班級或搜尋時，已選名單會保留。</p>
+          <p className="form-intro">可選擇 1 位或多位學生。切換班級、搜尋或翻頁時，已選名單會保留。</p>
           <div className="batch-student-toolbar">
             <label className="field"><span>班別</span><select value={classFilter} onChange={(event) => onClassFilterChange(event.target.value)}>{classes.map((className) => <option key={className}>{className}</option>)}</select></label>
-            <label className="batch-search"><Search size={16}/><input autoFocus aria-label="搜尋批次學生" placeholder="搜尋姓名或學號" value={search} onChange={(event) => onSearch(event.target.value)}/></label>
+            <label className="batch-search"><Search size={16}/><input autoFocus aria-label="搜尋學生" placeholder="搜尋姓名或學號" value={search} onChange={(event) => onSearch(event.target.value)}/></label>
           </div>
           <div className="batch-picker-head"><div><strong>學生名單</strong><span aria-live="polite">目前顯示 {visibleStudents.length} 位</span></div><div><button type="button" onClick={onToggleVisible} disabled={!visibleStudents.length}>{allVisibleSelected ? "取消本頁選取" : "全選本頁"}</button><button type="button" onClick={onClearSelection} disabled={!selectedStudents.length}>清除已選</button></div></div>
           <div className="batch-student-list" aria-label="可選學生">
-            {visibleStudents.map((student) => <label key={student.id} className={"batch-student-row" + (selectedIds.has(student.id) ? " selected" : "")}>
-              <input type="checkbox" checked={selectedIds.has(student.id)} onChange={() => onToggleStudent(student.id)}/>
-              <Avatar student={student}/>
-              <span><strong>{student.name}</strong><small>{student.className} · 座號 {student.seat}</small></span>
-              <em>{student.number}</em>
-            </label>)}
+            {visibleGroups.map(([groupClass, groupStudents]) => <section className="batch-class-group" key={groupClass} aria-labelledby={`create-student-group-${groupClass}`}>
+              <h3 id={`create-student-group-${groupClass}`}>{groupClass}</h3>
+              {groupStudents.map((student) => <label key={student.id} className={"batch-student-row" + (selectedIds.has(student.id) ? " selected" : "")}>
+                <input type="checkbox" checked={selectedIds.has(student.id)} onChange={() => onToggleStudent(student.id)}/>
+                <strong>{student.name}</strong>
+              </label>)}
+            </section>)}
             {!visibleStudents.length && <div className="batch-empty"><Search size={20}/><strong>找不到學生</strong><span>請更改班別或搜尋字詞。</span></div>}
           </div>
-          <ListPagination page={pagination} label="批次學生" unit="位"/>
-          <div className="batch-selected-summary" aria-live="polite"><div><strong>已選 {selectedStudents.length} 位學生</strong><span>可跨班選擇</span></div>{selectedStudents.length > 0 && <section>{displayedSelected.map((student) => <span key={student.id}>{student.className} · {student.name}</span>)}{selectedStudents.length > displayedSelected.length && <b>另有 {selectedStudents.length - displayedSelected.length} 位</b>}</section>}</div>
+          <ListPagination page={pagination} label="選擇學生" unit="位"/>
+          <div className="batch-selected-summary" aria-live="polite"><div><strong>已選 {selectedStudents.length} 位學生</strong><span>可單選、多選或跨班選擇</span></div>{selectedStudents.length > 0 && <section>{displayedSelected.map((student) => <span key={student.id}>{student.className} · {student.name}</span>)}{selectedStudents.length > displayedSelected.length && <b>另有 {selectedStudents.length - displayedSelected.length} 位</b>}</section>}</div>
           {error && <p className="batch-error" role="alert">{error}</p>}
         </div>
         <div className="panel-foot"><button type="button" className="btn secondary" onClick={onClose}>取消</button><button type="button" className="btn primary" onClick={onNextStudents}>下一步：填寫內容 <ArrowRight size={16}/></button></div>
       </div>}
 
       {step === "details" && <form className="entry-form" onSubmit={onSubmitDetails}>
-        <div className="panel-body batch-body" ref={stepContentRef} tabIndex={-1} aria-label="批次建立第 2 步：填寫內容">
+        <div className="panel-body batch-body" ref={stepContentRef} tabIndex={-1} aria-label="新增訓育紀錄第 2 步：填寫內容">
           <p className="form-intro">以下內容會分別加入 {selectedStudents.length} 位學生的個人紀錄；每筆紀錄之後可獨立修改及跟進。</p>
-          <RulePicker id="batch-rule" value={draft} onChange={onDraftChange}/>
+          <RulePicker id="create-rule" value={draft} onChange={onDraftChange}/>
           <label className="field"><span>日期 *</span><input type="date" max={today} value={draft.date} onChange={(event) => onDraftChange({ date: event.target.value })} required/></label>
           <label className="field"><span>內容說明 *</span><textarea rows={5} maxLength={300} placeholder="輸入所有已選學生共用的事項內容…" value={draft.note} onChange={(event) => onDraftChange({ note: event.target.value })} required/><small>{draft.note.length}/300 字</small></label>
           <fieldset className="batch-follow-field"><legend>建立後是否需要跟進？</legend><div className="batch-follow-options">
-            <label className={!draft.needsFollowUp ? "active" : ""}><input type="radio" name="batch-follow-up" checked={!draft.needsFollowUp} onChange={() => onDraftChange({ needsFollowUp: false })}/><span><strong>不需跟進</strong><small>建立後列為已結案，不會加入待辦中心</small></span></label>
-            <label className={draft.needsFollowUp ? "active" : ""}><input type="radio" name="batch-follow-up" checked={draft.needsFollowUp} onChange={() => onDraftChange({ needsFollowUp: true })}/><span><strong>需要跟進</strong><small>每位學生各自建立一項待辦</small></span></label>
+            <label className={!draft.needsFollowUp ? "active" : ""}><input type="radio" name="create-follow-up" checked={!draft.needsFollowUp} onChange={() => onDraftChange({ needsFollowUp: false })}/><span><strong>不需跟進</strong><small>建立後列為已結案，不會加入待辦中心</small></span></label>
+            <label className={draft.needsFollowUp ? "active" : ""}><input type="radio" name="create-follow-up" checked={draft.needsFollowUp} onChange={() => onDraftChange({ needsFollowUp: true })}/><span><strong>需要跟進</strong><small>每位學生各自建立一項待辦</small></span></label>
           </div></fieldset>
-          {draft.needsFollowUp && <div className="batch-follow-fields"><div className="field-row"><label className="field"><span>共同負責人</span><input maxLength={40} placeholder="例如：中一級班主任" value={draft.assignee} onChange={(event) => onDraftChange({ assignee: event.target.value })}/></label><label className="field"><span>共同跟進期限</span><input type="date" min={draft.date} value={draft.dueDate} onChange={(event) => onDraftChange({ dueDate: event.target.value })}/></label></div><small>兩項均可留空，之後可在個案詳情逐筆安排。</small></div>}
+          {draft.needsFollowUp && <div className="batch-follow-fields"><div className="field-row"><label className="field"><span>負責人</span><input maxLength={40} placeholder="例如：中一級班主任" value={draft.assignee} onChange={(event) => onDraftChange({ assignee: event.target.value })}/></label><label className="field"><span>跟進期限</span><input type="date" min={draft.date} value={draft.dueDate} onChange={(event) => onDraftChange({ dueDate: event.target.value })}/></label></div><small>兩項均可留空，之後可在個案詳情逐筆安排。</small></div>}
           {error && <p className="batch-error" role="alert">{error}</p>}
           <p className="form-warning"><ShieldCheck size={16}/> 建立後會產生 {selectedStudents.length} 筆獨立紀錄；下一步可再次核對名單及內容。</p>
         </div>
@@ -933,7 +927,7 @@ function BatchRecordPanel({
       </form>}
 
       {step === "review" && <div className="entry-form">
-        <div className="panel-body batch-body" ref={stepContentRef} tabIndex={-1} aria-label="批次建立第 3 步：核對建立">
+        <div className="panel-body batch-body" ref={stepContentRef} tabIndex={-1} aria-label="新增訓育紀錄第 3 步：核對建立">
           <div className="batch-review-hero"><span><ClipboardList size={23}/></span><div><small>準備建立</small><strong>{createCount} 筆獨立紀錄</strong><p>建立後，每位學生的時間線及個案會分開顯示。</p></div></div>
           {selectedRule.rule && <RuleDetails rule={selectedRule.rule} scoreChange={selectedRule.scoreChange}/>}
           <div className="batch-review-grid"><div><span>日期</span><strong>{dateLabel(draft.date)}</strong></div><div><span>跟進狀態</span><strong>{draft.needsFollowUp ? "待跟進" : "不需跟進（已結案）"}</strong></div>{draft.needsFollowUp && <><div><span>負責人</span><strong>{draft.assignee.trim() || "未指定"}</strong></div><div><span>跟進期限</span><strong>{draft.dueDate ? dateLabel(draft.dueDate) : "未設定"}</strong></div></>}</div>
