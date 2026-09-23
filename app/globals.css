@@ -303,7 +303,7 @@ body{font-size:1rem;line-height:1.5}
 .lookup-results{display:grid;gap:12px}
 .lookup-class-group{display:grid;gap:4px}
 .lookup-class-group h3{margin:0;padding:7px 2px 3px;color:#2f635d;font-size:.875rem;font-weight:800}
-.lookup-name-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(128px,1fr));gap:0 8px;margin:0;padding:0;border-top:1px solid var(--line);list-style:none}
+.lookup-name-list{display:grid;grid-template-columns:1fr;margin:0;padding:0;border-top:1px solid var(--line);list-style:none}
 .lookup-name-list li{min-width:0;border-bottom:1px solid var(--line)}
 .lookup-name-item{width:100%;min-height:40px;padding:7px 4px;border:0;border-radius:0;background:transparent;color:#17313c;font-size:1rem;font-weight:700;text-align:left;cursor:pointer}
 .lookup-name-item:hover{background:#eef7f4;color:#087872}.lookup-name-item:active{background:#dfefeb}
