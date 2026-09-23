@@ -332,7 +332,6 @@ body{font-size:1rem;line-height:1.5}
 .records-table th:nth-child(4){width:12%}
 .records-table th:nth-child(5){width:12%}
 .records-table th:last-child{width:13%}
-.student-row-actions .btn{margin-bottom:6px}
 .row-button{min-height:40px;white-space:normal}
 .actions{flex-wrap:wrap}
 .actual-score{font-variant-numeric:tabular-nums;white-space:nowrap;color:#176b60}
@@ -383,7 +382,6 @@ body{font-size:1rem;line-height:1.5}
   .table-card td:first-child,.table-card td:last-child,.table-card td.record-item{grid-column:1/-1}
   .table-card td:last-child{display:flex;align-items:center;gap:12px}
   .table-card .person strong span{display:inline}
-  .table-card .student-row-actions .btn{margin:0}
   .entry-note{max-width:none}
   .todo-item{grid-template-columns:1fr 1fr;grid-template-areas:"due student" "content content" "owner actions"}
 }

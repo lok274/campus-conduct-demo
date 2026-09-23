@@ -714,7 +714,6 @@ function Workspace({ students, initialEntries, largeFixture }: { students: Stude
         {page === "students" && <StudentDirectory
           students={studentPage.items}
           pagination={studentPage}
-          onAddEntry={addEntry}
           totalCount={students.length}
           stats={studentStats}
           search={studentSearch}
@@ -1029,10 +1028,9 @@ function FilterSummary({ labels, onReset }: { labels: string[]; onReset: () => v
   </div>;
 }
 
-function StudentDirectory({ students: shown, totalCount, pagination, onAddEntry, stats, search, classFilter, followUpFilter, sort, filtersOpen, activeFilters, classes, onSearch, onClassFilterChange, onFollowUpFilterChange, onSortChange, onFiltersOpenChange, onReset, onOpenStudent }: {
+function StudentDirectory({ students: shown, totalCount, pagination, stats, search, classFilter, followUpFilter, sort, filtersOpen, activeFilters, classes, onSearch, onClassFilterChange, onFollowUpFilterChange, onSortChange, onFiltersOpenChange, onReset, onOpenStudent }: {
   students: Student[];
   pagination: ListPage;
-  onAddEntry: (id: string) => void;
   totalCount: number;
   stats: Map<string, { total: number; pending: number; overdue: number; latest: string }>;
   search: string;
@@ -1073,7 +1071,7 @@ function StudentDirectory({ students: shown, totalCount, pagination, onAddEntry,
     <FilterSummary labels={activeFilters} onReset={onReset}/>
     <div className="table-scroll"><table><thead><tr><th>學生</th><th>班級 / 學號</th><th>紀錄數</th><th>待跟進</th><th>操作</th></tr></thead><tbody>{shown.map((student) => {
       const item = stats.get(student.id)!;
-      return <tr key={student.id}><td><div className="person"><Avatar student={student}/><div><strong>{student.name}</strong><small>座號 {student.seat}</small></div></div></td><td><strong>{student.className}</strong><small className="cell-sub">{student.number}</small></td><td data-label="紀錄數"><span className="count">{item.total}</span></td><td data-label="待跟進">{item.pending ? <span className={item.overdue ? "todo-count overdue-text" : "todo-count"}>● {item.pending} 項{item.overdue ? `（${item.overdue} 項逾期）` : ""}</span> : <span className="muted">—</span>}</td><td className="student-row-actions"><button type="button" className="btn primary" onClick={() => onAddEntry(student.id)}>登記紀錄</button><button type="button" className="row-button" onClick={() => onOpenStudent(student.id)}>查看資料 <ChevronRight size={15}/></button></td></tr>;
+      return <tr key={student.id}><td><div className="person"><Avatar student={student}/><div><strong>{student.name}</strong><small>座號 {student.seat}</small></div></div></td><td><strong>{student.className}</strong><small className="cell-sub">{student.number}</small></td><td data-label="紀錄數"><span className="count">{item.total}</span></td><td data-label="待跟進">{item.pending ? <span className={item.overdue ? "todo-count overdue-text" : "todo-count"}>● {item.pending} 項{item.overdue ? `（${item.overdue} 項逾期）` : ""}</span> : <span className="muted">—</span>}</td><td><button type="button" className="row-button" onClick={() => onOpenStudent(student.id)}>查看資料 <ChevronRight size={15}/></button></td></tr>;
     })}</tbody></table>{!shown.length && <Empty text="找不到符合條件的學生" hint="可清除條件後重新查看全部學生。" onReset={activeFilters.length ? onReset : undefined}/>}</div>
     <ListPagination page={pagination} label="學生名冊" unit="位"/>
     <div className="list-total-note">全校 {totalCount.toLocaleString()} 位虛構學生 · 篩選不會改變學生摘要統計</div>
