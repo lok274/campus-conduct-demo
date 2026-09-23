@@ -630,7 +630,7 @@ function Workspace({ students, initialEntries, largeFixture }: { students: Stude
   }
   const titles: Record<Page, string> = { dashboard: "訓育工作台", todos: "待辦中心", students: "學生名冊", records: "獎懲紀錄" };
   const subtitles: Record<Page, string> = {
-    dashboard: "查看最近紀錄及優先待辦。所有操作只使用虛構示範資料。",
+    dashboard: "查看優先待辦。所有操作只使用虛構示範資料。",
     todos: "按期限處理未結案個案，並追蹤每項跟進安排。",
     students: "查看學生資料與個別訓育紀錄。",
     records: "集中查閱、篩選及更新訓育事項。",
@@ -677,20 +677,13 @@ function Workspace({ students, initialEntries, largeFixture }: { students: Stude
           </div>}
         </div>
         {page === "dashboard" && <>
-          <div className="dashboard-grid">
-            <section className="card list-card"><div className="card-heading"><div><small>最新動態</small><h2>最近 5 筆紀錄</h2></div><button type="button" onClick={() => { resetRecordFilters(); setRecordSort("date-desc"); recordPage.onPage(1); navigate("records"); }}>全部紀錄 <ArrowRight size={15}/></button></div>
-              {[...entries].sort((a,b) => b.date.localeCompare(a.date)).slice(0,5).map(entry => { const student = studentMap.get(entry.studentId)!; return <button type="button" className="activity" key={entry.id} onClick={() => openCase(entry.id)}>
-                <Avatar student={student}/><div><strong>{student.name} <span>· {student.className} · {student.seat} 號</span></strong><p>{entry.category}</p><small>{student.number} · {dateLabel(entry.date)}</small></div><section><b>{scoreLabel(entry)}</b><StatusTag status={entry.status}/></section>
-              </button>; })}
-            </section>
-            <section className="card follow-card"><div className="card-heading"><div><small>待辦清單 · 共 {pending.length} 項</small><h2>優先處理 5 項</h2></div></div>
-              {[...pending].sort((a,b) => compareTodoPriority(a,b,today)).slice(0,5).map(entry => { const student = studentMap.get(entry.studentId)!; const due = todoDueMeta(entry,today); return <button type="button" className={"follow " + due.tone} key={entry.id} onClick={() => openCase(entry.id)}>
-                <div><strong>{student.name} <span>· {student.className} · {student.seat} 號</span></strong><p>{entry.category}</p><small>{student.number} · 負責人：{entry.assignee || "未指定"}</small></div><section><strong>{due.label}</strong><small>{due.date}</small><ChevronRight size={18}/></section>
-              </button>; })}
-              {!pending.length && <p className="empty-inline">目前沒有待跟進事項。</p>}
-              <button type="button" className="follow-all" onClick={() => { resetTodoFilters(); setTodoScope("open"); setTodoSort("priority"); todoPage.onPage(1); navigate("todos"); }}>完整待辦清單 <ArrowRight size={15}/></button>
-            </section>
-          </div>
+          <section className="card follow-card"><div className="card-heading"><div><small>待辦清單 · 共 {pending.length} 項</small><h2>優先處理 5 項</h2></div></div>
+            {[...pending].sort((a,b) => compareTodoPriority(a,b,today)).slice(0,5).map(entry => { const student = studentMap.get(entry.studentId)!; const due = todoDueMeta(entry,today); return <button type="button" className={"follow " + due.tone} key={entry.id} onClick={() => openCase(entry.id)}>
+              <div><strong>{student.name} <span>· {student.className} · {student.seat} 號</span></strong><p>{entry.category}</p><small>{student.number} · 負責人：{entry.assignee || "未指定"}</small></div><section><strong>{due.label}</strong><small>{due.date}</small><ChevronRight size={18}/></section>
+            </button>; })}
+            {!pending.length && <p className="empty-inline">目前沒有待跟進事項。</p>}
+            <button type="button" className="follow-all" onClick={() => { resetTodoFilters(); setTodoScope("open"); setTodoSort("priority"); todoPage.onPage(1); navigate("todos"); }}>完整待辦清單 <ArrowRight size={15}/></button>
+          </section>
         </>}
         {page === "todos" && <TodoCenter
           todos={todoPage.items}
