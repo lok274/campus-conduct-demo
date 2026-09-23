@@ -472,8 +472,8 @@ function Workspace({ students, initialEntries, largeFixture }: { students: Stude
       closeGlobalSearch();
     }
   }
-  function addEntry(id?: string) {
-    setEditingId(null); setFormReturnCaseId(null); setDraft({ ...newDraft(), studentId: id ?? "" });
+  function addEntry() {
+    setEditingId(null); setFormReturnCaseId(null); setDraft({ ...newDraft(), studentId: "" });
     setEntryError("");
     setStudentId(null); setCaseId(null); setCaseReturnStudentId(null); setBatchFormOpen(false); setFormOpen(true);
   }
@@ -768,7 +768,7 @@ function Workspace({ students, initialEntries, largeFixture }: { students: Stude
         <footer>校園訓育系統 · 前端介面示範 <span>所有學生及紀錄均為虛構資料</span></footer>
       </main>
     </div>
-    {selected && <div className="overlay" onMouseDown={(e) => { if (e.target === e.currentTarget) setStudentId(null); }}><section className="panel" role="dialog" aria-modal="true" aria-labelledby="student-title"><div className="panel-head"><div><small>STUDENT PROFILE</small><h2 id="student-title">學生資料</h2></div><button type="button" aria-label="關閉學生資料" onClick={() => setStudentId(null)}><X size={20}/></button></div><div className="panel-body"><div className="profile"><Avatar student={selected} large/><div><h3>{selected.name}</h3><p>{selected.className} · 座號 {selected.seat}</p></div></div><div className="profile-facts"><div><span>學號</span><strong>{selected.number}</strong></div><div><span>班級</span><strong>{selected.className}</strong></div><div><span>紀錄總數</span><strong>{selectedEntries.length} 筆</strong></div></div><StudentOverview entries={selectedEntries} today={today} onOpenCase={openCase}/><h3 className="block-title">個人紀錄時間線 <span>{selectedTimeline.length} 項事件</span></h3><p className="timeline-intro">按日期查看紀錄、跟進與結案；紀錄總數指個案數目。</p><StudentTimeline events={selectedTimeline} onOpenCase={openCase}/></div><div className="panel-foot"><button type="button" className="btn primary wide" onClick={() => addEntry(selected.id)}><Plus size={17}/>為此學生新增紀錄</button></div></section></div>}
+    {selected && <div className="overlay" onMouseDown={(e) => { if (e.target === e.currentTarget) setStudentId(null); }}><section className="panel" role="dialog" aria-modal="true" aria-labelledby="student-title"><div className="panel-head"><div><small>STUDENT PROFILE</small><h2 id="student-title">學生資料</h2></div><button type="button" aria-label="關閉學生資料" onClick={() => setStudentId(null)}><X size={20}/></button></div><div className="panel-body"><div className="profile"><Avatar student={selected} large/><div><h3>{selected.name}</h3><p>{selected.className} · 座號 {selected.seat}</p></div></div><div className="profile-facts"><div><span>學號</span><strong>{selected.number}</strong></div><div><span>班級</span><strong>{selected.className}</strong></div><div><span>紀錄總數</span><strong>{selectedEntries.length} 筆</strong></div></div><StudentOverview entries={selectedEntries} today={today} onOpenCase={openCase}/><h3 className="block-title">個人紀錄時間線 <span>{selectedTimeline.length} 項事件</span></h3><p className="timeline-intro">按日期查看紀錄、跟進與結案；紀錄總數指個案數目。</p><StudentTimeline events={selectedTimeline} onOpenCase={openCase}/></div></section></div>}
     {formOpen && <div className="overlay" onMouseDown={(e) => { if (e.target === e.currentTarget) closeEntryForm(); }}>
       <section className="panel" role="dialog" aria-modal="true" aria-labelledby="form-title">
         <div className="panel-head"><div><small>CONDUCT RECORD</small><h2 id="form-title">{formReturnCaseId ? "1 建立紀錄 · 更正資料" : editingId ? "編輯訓育紀錄" : "新增訓育紀錄"}</h2></div><button type="button" aria-label="關閉表單" onClick={closeEntryForm}><X size={20}/></button></div>
