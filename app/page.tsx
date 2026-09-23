@@ -11,12 +11,10 @@ import { compareTodoPriority, duplicateStudentIds, matchesStudent, normalizeSear
 import { ListPagination, useListPage, type ListPage } from "../components/list-pagination";
 import { StudentPicker } from "../components/student-picker";
 
-type Page = "dashboard" | "todos" | "students" | "records";
+type Page = "dashboard" | "todos" | "records";
 type TodoScope = "open" | "completed";
 type TodoFilter = "all" | "overdue" | "today" | "next7" | "unscheduled";
 type TodoSort = "priority" | "updated-desc" | "student-asc" | "class-asc";
-type StudentFollowUpFilter = "全部跟進" | "有待跟進" | "有逾期待辦" | "沒有待跟進";
-type StudentSort = "class-asc" | "name-asc" | "records-desc" | "pending-desc" | "latest-desc";
 type RecordSort = "date-desc" | "date-asc" | "updated-desc" | "student-asc" | "status-priority";
 type TimelineEvent = {
   id: string; caseId: string; date: string; at?: string; order: number;
@@ -108,7 +106,6 @@ function buildStudentTimeline(entries: Entry[]): TimelineEvent[] {
 const nav: { id: Page; text: string; Icon: typeof LayoutDashboard }[] = [
   { id: "dashboard", text: "總覽", Icon: LayoutDashboard },
   { id: "todos", text: "待辦中心", Icon: Clock3 },
-  { id: "students", text: "學生名冊", Icon: UsersRound },
   { id: "records", text: "獎懲紀錄", Icon: ClipboardList },
 ];
 
@@ -137,11 +134,6 @@ export default function Home() {
 function Workspace({ students, initialEntries, largeFixture }: { students: Student[]; initialEntries: Entry[]; largeFixture: boolean }) {
   const [page, setPage] = useState<Page>("dashboard");
   const [entries, setEntries] = useState<Entry[]>(initialEntries);
-  const [studentSearch, setStudentSearch] = useState("");
-  const [studentClassFilter, setStudentClassFilter] = useState("全部班級");
-  const [studentFollowUpFilter, setStudentFollowUpFilter] = useState<StudentFollowUpFilter>("全部跟進");
-  const [studentSort, setStudentSort] = useState<StudentSort>("class-asc");
-  const [studentFiltersOpen, setStudentFiltersOpen] = useState(false);
   const [recordSearch, setRecordSearch] = useState("");
   const [recordClassFilter, setRecordClassFilter] = useState("全部班級");
   const [recordKindFilter, setRecordKindFilter] = useState("全部類型");
@@ -278,39 +270,17 @@ function Workspace({ students, initialEntries, largeFixture }: { students: Stude
   const assignees = [ALL_ASSIGNEES, UNASSIGNED, ...new Set(entries.map((entry) => entry.assignee?.trim()).filter((value): value is string => Boolean(value) && value !== ALL_ASSIGNEES && value !== UNASSIGNED))];
   const recordCategories = ["全部事項", ...new Set(entries.map((entry) => entry.category))];
   const studentStats = useMemo(() => {
-    const stats = new Map(students.map((student) => [student.id, { total: 0, pending: 0, overdue: 0, latest: "" }]));
+    const stats = new Map(students.map((student) => [student.id, { total: 0, pending: 0 }]));
     for (const entry of entries) {
       const item = stats.get(entry.studentId);
       if (!item) continue;
       item.total += 1;
       if (entry.status !== "已結案") item.pending += 1;
-      if (entry.status !== "已結案" && entry.dueDate && entry.dueDate < today) item.overdue += 1;
-      const latest = latestActivityDate(entry);
-      if (latest > item.latest) item.latest = latest;
     }
     return stats;
-  }, [entries, today, students]);
+  }, [entries, students]);
   const compareStudentClass = (a: Student, b: Student) =>
     (classOrder.get(a.className) ?? 999) - (classOrder.get(b.className) ?? 999) || Number(a.seat) - Number(b.seat) || a.name.localeCompare(b.name, "zh-Hant");
-  const studentQuery = normalizeSearch(studentSearch);
-  const shownStudents = students.filter((student) => {
-    const stats = studentStats.get(student.id)!;
-    const matchesSearch = matchesStudent(student, studentQuery);
-    const matchesClass = studentClassFilter === "全部班級" || student.className === studentClassFilter;
-    const matchesFollowUp = studentFollowUpFilter === "全部跟進" ||
-      (studentFollowUpFilter === "有待跟進" && stats.pending > 0) ||
-      (studentFollowUpFilter === "有逾期待辦" && stats.overdue > 0) ||
-      (studentFollowUpFilter === "沒有待跟進" && stats.pending === 0);
-    return matchesSearch && matchesClass && matchesFollowUp;
-  }).sort((a, b) => {
-    const aStats = studentStats.get(a.id)!;
-    const bStats = studentStats.get(b.id)!;
-    if (studentSort === "name-asc") return a.name.localeCompare(b.name, "zh-Hant") || compareStudentClass(a, b);
-    if (studentSort === "records-desc") return bStats.total - aStats.total || compareStudentClass(a, b);
-    if (studentSort === "pending-desc") return bStats.pending - aStats.pending || bStats.overdue - aStats.overdue || compareStudentClass(a, b);
-    if (studentSort === "latest-desc") return bStats.latest.localeCompare(aStats.latest) || compareStudentClass(a, b);
-    return compareStudentClass(a, b);
-  });
   const recordQuery = normalizeSearch(recordSearch);
   const recordDateRangeInvalid = Boolean(recordDateFrom && recordDateTo && recordDateFrom > recordDateTo);
   const shownEntries = entries.filter((e) => {
@@ -358,7 +328,6 @@ function Workspace({ students, initialEntries, largeFixture }: { students: Stude
     if (todoScope === "completed") return (b.closedAt ?? latestActivityDate(b)).localeCompare(a.closedAt ?? latestActivityDate(a)) || a.id.localeCompare(b.id);
     return compareTodoPriority(a, b, today);
   });
-  const studentPage = useListPage(shownStudents, JSON.stringify([studentSearch, studentClassFilter, studentFollowUpFilter, studentSort]));
   const recordPage = useListPage(shownEntries, JSON.stringify([recordSearch, recordClassFilter, recordKindFilter, recordCategoryFilter, recordStatusFilter, recordAssigneeFilter, recordDateFrom, recordDateTo, recordSort]));
   const todoPage = useListPage(shownTodos, JSON.stringify([todoSearch, todoScope, todoFilter, todoClassFilter, todoKindFilter, todoStatusFilter, todoAssigneeFilter, todoSort]));
   const globalQuery = normalizeSearch(globalSearch);
@@ -380,11 +349,6 @@ function Workspace({ students, initialEntries, largeFixture }: { students: Stude
     return [...studentResults, ...recordResults].sort((a,b) => a.score - b.score || b.date.localeCompare(a.date) || a.title.localeCompare(b.title, "zh-Hant"));
   }, [entries, globalQuery, studentMap, studentStats, students]);
   const globalResults: GlobalSearchResult[] = allGlobalResults.slice(0, 8);
-  const studentActiveFilters = [
-    studentSearch && `搜尋「${studentSearch}」`,
-    studentClassFilter !== "全部班級" && studentClassFilter,
-    studentFollowUpFilter !== "全部跟進" && studentFollowUpFilter,
-  ].filter(Boolean) as string[];
   const recordActiveFilters = [
     recordSearch && `搜尋「${recordSearch}」`,
     recordClassFilter !== "全部班級" && recordClassFilter,
@@ -424,9 +388,6 @@ function Workspace({ students, initialEntries, largeFixture }: { students: Stude
   const selectedCase = caseId ? entries.find((e) => e.id === caseId) : undefined;
   const caseStudent = selectedCase ? studentMap.get(selectedCase.studentId) : undefined;
 
-  function resetStudentFilters() {
-    setStudentSearch(""); setStudentClassFilter("全部班級"); setStudentFollowUpFilter("全部跟進");
-  }
   function resetRecordFilters() {
     setRecordSearch(""); setRecordClassFilter("全部班級"); setRecordKindFilter("全部類型"); setRecordCategoryFilter("全部事項");
     setRecordStatusFilter("全部狀態"); setRecordAssigneeFilter(ALL_ASSIGNEES); setRecordDateFrom(""); setRecordDateTo("");
@@ -436,10 +397,6 @@ function Workspace({ students, initialEntries, largeFixture }: { students: Stude
     setTodoStatusFilter("全部狀態"); setTodoAssigneeFilter(ALL_ASSIGNEES);
   }
   function navigate(next: Page) { setPage(next); setMenuOpen(false); if (next !== page) window.scrollTo({ top: 0 }); }
-  function showStudentResults(query: string, className = "全部班級") {
-    resetStudentFilters(); setStudentSearch(query); setStudentClassFilter(className); setStudentSort("class-asc"); studentPage.onPage(1);
-    closeGlobalSearch(); navigate("students");
-  }
   function showRecordResults() {
     resetRecordFilters(); setRecordSearch(globalSearch); setRecordSort("date-desc"); recordPage.onPage(1);
     closeGlobalSearch(); navigate("records");
@@ -628,11 +585,10 @@ function Workspace({ students, initialEntries, largeFixture }: { students: Stude
     } : e));
     setNotice("個案已重新開啟");
   }
-  const titles: Record<Page, string> = { dashboard: "訓育工作台", todos: "待辦中心", students: "學生名冊", records: "獎懲紀錄" };
+  const titles: Record<Page, string> = { dashboard: "訓育工作台", todos: "待辦中心", records: "獎懲紀錄" };
   const subtitles: Record<Page, string> = {
     dashboard: "建立及管理學生訓育紀錄。所有操作只使用虛構示範資料。",
     todos: "按期限處理未結案個案，並追蹤每項跟進安排。",
-    students: "查看學生資料與個別訓育紀錄。",
     records: "集中查閱、篩選及更新訓育事項。",
   };
   const title = titles[page];
@@ -653,9 +609,7 @@ function Workspace({ students, initialEntries, largeFixture }: { students: Stude
         query={globalSearch}
         open={globalSearchOpen}
         results={globalResults}
-        studentCount={allGlobalResults.filter(result => result.type === "student").length}
         recordCount={allGlobalResults.filter(result => result.type === "record").length}
-        onAllStudents={() => showStudentResults(globalSearch)}
         onAllRecords={showRecordResults}
         activeIndex={globalSearchActiveIndex}
         inputRef={globalSearchInputRef}
@@ -710,26 +664,6 @@ function Workspace({ students, initialEntries, largeFixture }: { students: Stude
           onFilterChange={(next) => { setTodoScope("open"); setTodoFilter(next); }}
           onOpenCase={openCase}
           onStart={startCase}
-        />}
-        {page === "students" && <StudentDirectory
-          students={studentPage.items}
-          pagination={studentPage}
-          totalCount={students.length}
-          stats={studentStats}
-          search={studentSearch}
-          classFilter={studentClassFilter}
-          followUpFilter={studentFollowUpFilter}
-          sort={studentSort}
-          filtersOpen={studentFiltersOpen}
-          activeFilters={studentActiveFilters}
-          classes={classes}
-          onSearch={setStudentSearch}
-          onClassFilterChange={setStudentClassFilter}
-          onFollowUpFilterChange={setStudentFollowUpFilter}
-          onSortChange={setStudentSort}
-          onFiltersOpenChange={setStudentFiltersOpen}
-          onReset={resetStudentFilters}
-          onOpenStudent={setStudentId}
         />}
         {page === "records" && <RecordsDirectory
           entries={recordPage.items}
@@ -827,9 +761,7 @@ function Workspace({ students, initialEntries, largeFixture }: { students: Stude
 }
 
 type GlobalSearchProps = {
-  studentCount: number;
   recordCount: number;
-  onAllStudents: () => void;
   onAllRecords: () => void;
   query: string;
   open: boolean;
@@ -846,7 +778,7 @@ type GlobalSearchProps = {
 };
 
 function GlobalSearch({
-  query, open, results, activeIndex, inputRef, containerRef, onOpen, onClose, onQueryChange, studentCount, recordCount, onAllStudents, onAllRecords,
+  query, open, results, activeIndex, inputRef, containerRef, onOpen, onClose, onQueryChange, recordCount, onAllRecords,
   onActiveIndexChange, onSelect, onKeyDown,
 }: GlobalSearchProps) {
   return <div className="global-search" ref={containerRef}>
@@ -888,7 +820,7 @@ function GlobalSearch({
         </button>)}</div>
       </>}
       {query && !results.length && <div className="global-search-empty"><Search size={20}/><strong>找不到相符內容</strong><p>請試試學生姓名、學號、事項分類或內容關鍵字。</p></div>}
-      {query && <div className="global-search-links"><button type="button" onClick={onAllStudents}>完整學生結果（{studentCount}）</button><button type="button" onClick={onAllRecords}>完整紀錄結果（{recordCount}）</button></div>}
+      {query && <div className="global-search-links"><button type="button" onClick={onAllRecords}>完整紀錄結果（{recordCount}）</button></div>}
       {query && <div className="global-search-footer"><span><kbd>↑</kbd><kbd>↓</kbd> 選擇</span><span><kbd>Enter</kbd> 開啟</span><button type="button" onClick={onClose}>關閉</button></div>}
     </div>}
   </div>;
@@ -1026,56 +958,6 @@ function FilterSummary({ labels, onReset }: { labels: string[]; onReset: () => v
     {labels.map((label, index) => <span className="filter-chip" key={index + "-" + label}>{label}</span>)}
     <button type="button" onClick={onReset}><RotateCcw size={13}/>清除全部</button>
   </div>;
-}
-
-function StudentDirectory({ students: shown, totalCount, pagination, stats, search, classFilter, followUpFilter, sort, filtersOpen, activeFilters, classes, onSearch, onClassFilterChange, onFollowUpFilterChange, onSortChange, onFiltersOpenChange, onReset, onOpenStudent }: {
-  students: Student[];
-  pagination: ListPage;
-  totalCount: number;
-  stats: Map<string, { total: number; pending: number; overdue: number; latest: string }>;
-  search: string;
-  classFilter: string;
-  followUpFilter: StudentFollowUpFilter;
-  sort: StudentSort;
-  filtersOpen: boolean;
-  activeFilters: string[];
-  classes: string[];
-  onSearch: (value: string) => void;
-  onClassFilterChange: (value: string) => void;
-  onFollowUpFilterChange: (value: StudentFollowUpFilter) => void;
-  onSortChange: (value: StudentSort) => void;
-  onFiltersOpenChange: (value: boolean) => void;
-  onReset: () => void;
-  onOpenStudent: (id: string) => void;
-}) {
-  const advancedCount = Number(followUpFilter !== "全部跟進");
-  return <section className="card table-card">
-    <div className="table-heading">
-      <div><small>STUDENT DIRECTORY</small><h2>學生資料 <b>{pagination.total}</b></h2></div>
-      <div className="filters list-toolbar">
-        <label className="search"><Search size={16}/><input aria-label="搜尋學生" placeholder="搜尋姓名、班級或學號" value={search} onChange={(event) => onSearch(event.target.value)}/></label>
-        <label className="select toolbar-select"><ArrowUpDown size={15}/><select aria-label="學生排序" value={sort} onChange={(event) => onSortChange(event.target.value as StudentSort)}>
-          <option value="class-asc">班級及座號</option><option value="name-asc">姓名</option><option value="pending-desc">待跟進最多</option><option value="records-desc">紀錄最多</option><option value="latest-desc">最近有活動</option>
-        </select></label>
-        <button type="button" className={"advanced-toggle" + (filtersOpen ? " active" : "")} aria-expanded={filtersOpen} aria-controls="student-advanced-filters" onClick={() => onFiltersOpenChange(!filtersOpen)}><SlidersHorizontal size={15}/>進階篩選{advancedCount > 0 && <b>{advancedCount}</b>}</button>
-      </div>
-    </div>
-    {filtersOpen && <div className="advanced-filter-panel" id="student-advanced-filters">
-      <div className="advanced-filter-head"><div><strong>篩選學生</strong><span>條件會同時套用</span></div><button type="button" onClick={onReset}><RotateCcw size={14}/>重設</button></div>
-      <div className="advanced-filter-grid compact">
-
-        <label className="filter-field"><span>跟進情況</span><select value={followUpFilter} onChange={(event) => onFollowUpFilterChange(event.target.value as StudentFollowUpFilter)}><option>全部跟進</option><option>有待跟進</option><option>有逾期待辦</option><option>沒有待跟進</option></select></label>
-      </div>
-    </div>}
-    <div className="persistent-filters"><label className="filter-field"><span>班級</span><select value={classFilter} onChange={(event) => onClassFilterChange(event.target.value)}>{classes.map((item) => <option key={item}>{item}</option>)}</select></label></div>
-    <FilterSummary labels={activeFilters} onReset={onReset}/>
-    <div className="table-scroll"><table><thead><tr><th>學生</th><th>班級 / 學號</th><th>紀錄數</th><th>待跟進</th><th>操作</th></tr></thead><tbody>{shown.map((student) => {
-      const item = stats.get(student.id)!;
-      return <tr key={student.id}><td><div className="person"><Avatar student={student}/><div><strong>{student.name}</strong><small>座號 {student.seat}</small></div></div></td><td><strong>{student.className}</strong><small className="cell-sub">{student.number}</small></td><td data-label="紀錄數"><span className="count">{item.total}</span></td><td data-label="待跟進">{item.pending ? <span className={item.overdue ? "todo-count overdue-text" : "todo-count"}>● {item.pending} 項{item.overdue ? `（${item.overdue} 項逾期）` : ""}</span> : <span className="muted">—</span>}</td><td><button type="button" className="row-button" onClick={() => onOpenStudent(student.id)}>查看資料 <ChevronRight size={15}/></button></td></tr>;
-    })}</tbody></table>{!shown.length && <Empty text="找不到符合條件的學生" hint="可清除條件後重新查看全部學生。" onReset={activeFilters.length ? onReset : undefined}/>}</div>
-    <ListPagination page={pagination} label="學生名冊" unit="位"/>
-    <div className="list-total-note">全校 {totalCount.toLocaleString()} 位虛構學生 · 篩選不會改變學生摘要統計</div>
-  </section>;
 }
 
 function RecordsDirectory({ entries, totalCount, pagination, studentMap, search, classFilter, kindFilter, categoryFilter, statusFilter, assigneeFilter, dateFrom, dateTo, dateRangeInvalid, sort, filtersOpen, activeFilters, classes, categories: recordCategories, assignees, onSearch, onClassFilterChange, onKindFilterChange, onCategoryFilterChange, onStatusFilterChange, onAssigneeFilterChange, onDateFromChange, onDateToChange, onSortChange, onFiltersOpenChange, onReset, onOpenCase, onEdit }: {
