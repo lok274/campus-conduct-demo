@@ -981,7 +981,7 @@ function BatchRecordPanel({
           <p className="form-intro">先選擇需要加入同一事項的學生。切換班級或搜尋時，已選名單會保留。</p>
           <div className="batch-student-toolbar">
             <label className="field"><span>班別</span><select value={classFilter} onChange={(event) => onClassFilterChange(event.target.value)}>{classes.map((className) => <option key={className}>{className}</option>)}</select></label>
-            <label className="batch-search"><Search size={16}/><input autoFocus aria-label="搜尋批次學生" placeholder="搜尋姓名、學號或座號" value={search} onChange={(event) => onSearch(event.target.value)}/></label>
+            <label className="batch-search"><Search size={16}/><input autoFocus aria-label="搜尋批次學生" placeholder="搜尋姓名或學號" value={search} onChange={(event) => onSearch(event.target.value)}/></label>
           </div>
           <div className="batch-picker-head"><div><strong>學生名單</strong><span aria-live="polite">目前顯示 {visibleStudents.length} 位</span></div><div><button type="button" onClick={onToggleVisible} disabled={!visibleStudents.length}>{allVisibleSelected ? "取消本頁選取" : "全選本頁"}</button><button type="button" onClick={onClearSelection} disabled={!selectedStudents.length}>清除已選</button></div></div>
           <div className="batch-student-list" aria-label="可選學生">

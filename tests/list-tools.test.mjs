@@ -17,6 +17,9 @@ test("same names remain distinct; exact student number / width / case normalizat
   assert.equal(same.length,2); assert.notEqual(same[0].className,same[1].className);
   assert.deepEqual(students.filter(s=>matchesStudent(s," ｔｅｓｔ０００１ ")).map(s=>s.id),["test-s1"]);
   assert.equal(studentSearchRank(students[0],"TEST0001"),0);
+  const seatOnly={...students[0],name:"學生甲",className:"測試班",number:"STUDENT-X",seat:"SEAT-ZZ"};
+  assert.equal(matchesStudent(seatOnly,"SEAT-ZZ"),false);
+  assert.equal(recordSearchText({...entries[0],note:"一般內容",category:"一般事項"},seatOnly).includes("seat-zz"),false);
 });
 test("cross-class filtering and empty results", () => {
   assert.equal(students.filter(s=>matchesStudent(s,"","測試1A")).length,35);
