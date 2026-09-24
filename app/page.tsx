@@ -10,7 +10,7 @@ import type { Student, Entry, FollowUp, Kind, LegacyKind, Status } from "../lib/
 import { duplicateStudentIds, matchesStudent, normalizeSearch, recordSearchText, scoreLabel, studentSearchRank, toggleSelection } from "../lib/list-tools";
 import { ListPagination, useListPage, type ListPage } from "../components/list-pagination";
 import { StudentPicker } from "../components/student-picker";
-import { MAX_RECORD_IMPORT_BYTES, parseRecordImport, serializeRecordExport } from "../lib/record-transfer";
+import { MAX_RECORD_IMPORT_BYTES, parseRecordCsv, parseRecordImport, serializeRecordCsv } from "../lib/record-transfer";
 
 type Page = "dashboard" | "records";
 type RecordSort = "date-desc" | "date-asc" | "updated-desc" | "student-asc" | "status-priority";
@@ -399,16 +399,16 @@ function Workspace({ students, initialEntries, largeFixture }: { students: Stude
     setRecordStatusFilter("全部狀態"); setRecordAssigneeFilter(ALL_ASSIGNEES); setRecordDateFrom(""); setRecordDateTo("");
   }
   function exportRecords() {
-    const blob = new Blob([serializeRecordExport(entries)], { type: "application/json;charset=utf-8" });
+    const blob = new Blob([serializeRecordCsv(entries, students)], { type: "text/csv;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `campus-conduct-records-${today}.json`;
+    link.download = `campus-conduct-records-${today}.csv`;
     document.body.appendChild(link);
     link.click();
     link.remove();
     window.setTimeout(() => URL.revokeObjectURL(url), 0);
-    setRecordTransferMessage({ tone: "success", text: `已匯出全部 ${entries.length.toLocaleString()} 筆紀錄；檔案包含跟進及結案歷史。` });
+    setRecordTransferMessage({ tone: "success", text: `已匯出全部 ${entries.length.toLocaleString()} 筆紀錄為 CSV；檔案包含跟進及結案歷史。` });
   }
   async function importRecords(event: ChangeEvent<HTMLInputElement>) {
     const input = event.currentTarget;
@@ -416,7 +416,10 @@ function Workspace({ students, initialEntries, largeFixture }: { students: Stude
     if (!file) return;
     try {
       if (file.size > MAX_RECORD_IMPORT_BYTES) throw new Error("檔案超過 5 MB，請分拆後再匯入。");
-      const imported = parseRecordImport(await file.text(), new Set(students.map((student) => student.id)));
+      const text = await file.text();
+      const imported = file.name.toLocaleLowerCase().endsWith(".json")
+        ? parseRecordImport(text, new Set(students.map((student) => student.id)))
+        : parseRecordCsv(text, students);
       const confirmed = window.confirm(`將以「${file.name}」內的 ${imported.length.toLocaleString()} 筆紀錄，取代目前 ${entries.length.toLocaleString()} 筆紀錄。\n\n學生名冊不會變更；重新整理頁面後仍會回到示範資料。是否繼續？`);
       if (!confirmed) {
         setRecordTransferMessage({ tone: "info", text: "已取消匯入，目前紀錄沒有變更。" });
@@ -657,9 +660,9 @@ function Workspace({ students, initialEntries, largeFixture }: { students: Stude
             <button ref={createButtonRef} type="button" className="btn primary" onClick={openCreateForm}><Plus size={17}/>新增紀錄</button>
           </div>}
           {page === "records" && <div className="page-actions record-transfer-actions">
-            <input ref={recordImportInputRef} className="sr-only" type="file" accept=".json,application/json" aria-label="選擇獎懲紀錄備份檔案" onChange={importRecords}/>
-            <button type="button" className="btn secondary" onClick={exportRecords}><Download size={17}/>匯出備份</button>
-            <button type="button" className="btn secondary" onClick={() => recordImportInputRef.current?.click()}><Upload size={17}/>匯入備份</button>
+            <input ref={recordImportInputRef} className="sr-only" type="file" accept=".csv,text/csv,.json,application/json" aria-label="選擇獎懲紀錄 CSV 備份檔案" onChange={importRecords}/>
+            <button type="button" className="btn secondary" onClick={exportRecords}><Download size={17}/>匯出 CSV</button>
+            <button type="button" className="btn secondary" onClick={() => recordImportInputRef.current?.click()}><Upload size={17}/>匯入 CSV</button>
           </div>}
         </div>
         {page === "records" && recordTransferMessage && <p className={`record-transfer-message ${recordTransferMessage.tone}`} role={recordTransferMessage.tone === "error" ? "alert" : "status"}>{recordTransferMessage.text}<button type="button" aria-label="關閉匯入匯出提示" onClick={() => setRecordTransferMessage(null)}><X size={14}/></button></p>}
