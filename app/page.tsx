@@ -11,6 +11,7 @@ import { duplicateStudentIds, matchesStudent, normalizeSearch, recordSearchText,
 import { ListPagination, useListPage, type ListPage } from "../components/list-pagination";
 import { StudentPicker } from "../components/student-picker";
 import { MAX_RECORD_IMPORT_BYTES, parseRecordCsv, parseRecordImport, serializeRecordCsv } from "../lib/record-transfer";
+import { applyBulkRecordUpdate, bulkRecordWouldChange, hasBulkRecordUpdate, restoreBulkRecordUpdate, type BulkRecordUpdate } from "../lib/bulk-record-update";
 
 type Page = "dashboard" | "records";
 type RecordSort = "date-desc" | "date-asc" | "updated-desc" | "student-asc" | "status-priority";
@@ -22,7 +23,9 @@ type TimelineEvent = {
 type Draft = Pick<Entry, "studentId" | "kind" | "category" | "date" | "note" | "status"> & RuleInput & { needsFollowUp: boolean };
 type CreateDraft = Pick<Entry, "kind" | "category" | "date" | "note"> & RuleInput & { needsFollowUp: boolean; assignee: string; dueDate: string };
 type CreateStep = "students" | "details" | "review";
+type BulkUpdateStep = "edit" | "confirm";
 type RecordTransferMessage = { tone: "success" | "error" | "info"; text: string };
+type BulkUpdateUndo = { before: Entry[]; count: number };
 type StoredCreateDraft = {
   draft: CreateDraft;
   studentIds: string[];
@@ -43,6 +46,9 @@ type GlobalSearchResult = {
 const ALL_ASSIGNEES = "__filter_all_assignees__";
 const UNASSIGNED = "__filter_unassigned__";
 const CREATE_DRAFT_STORAGE_KEY = "campus-conduct:create-draft:v1";
+const newBulkRecordUpdate = (): BulkRecordUpdate => ({
+  assigneeEnabled: false, assignee: "", dueDateEnabled: false, dueDate: "", statusEnabled: false, status: "待跟進",
+});
 
 const students: Student[] = [
   { id: "s1", name: "陳子晴", className: "中一甲", seat: "03", number: "S260103" },
@@ -195,6 +201,12 @@ function Workspace({ students, initialEntries, largeFixture }: { students: Stude
   const [undoBatch, setUndoBatch] = useState<{ id: string; count: number } | null>(null);
   const [notice, setNotice] = useState("");
   const [recordTransferMessage, setRecordTransferMessage] = useState<RecordTransferMessage | null>(null);
+  const [recordSelectedIds, setRecordSelectedIds] = useState<string[]>([]);
+  const [bulkUpdateOpen, setBulkUpdateOpen] = useState(false);
+  const [bulkUpdateStep, setBulkUpdateStep] = useState<BulkUpdateStep>("edit");
+  const [bulkUpdateDraft, setBulkUpdateDraft] = useState<BulkRecordUpdate>(newBulkRecordUpdate);
+  const [bulkUpdateError, setBulkUpdateError] = useState("");
+  const [bulkUpdateUndo, setBulkUpdateUndo] = useState<BulkUpdateUndo | null>(null);
   const [today, setToday] = useState(currentLocalDate);
   const createButtonRef = useRef<HTMLButtonElement>(null);
   const recordImportInputRef = useRef<HTMLInputElement>(null);
@@ -245,10 +257,13 @@ function Workspace({ students, initialEntries, largeFixture }: { students: Stude
     return () => window.clearTimeout(timer);
   }, []);
   useEffect(() => {
-    if (!formOpen && !batchFormOpen && !studentId && !caseId) return;
+    if (!formOpen && !batchFormOpen && !bulkUpdateOpen && !studentId && !caseId) return;
     const close = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
-        if (batchFormOpen) {
+        if (bulkUpdateOpen) {
+          setBulkUpdateOpen(false); setBulkUpdateStep("edit"); setBulkUpdateError("");
+        }
+        else if (batchFormOpen) {
           setBatchFormOpen(false); setBatchStep("students"); setBatchError("");
           window.setTimeout(() => createButtonRef.current?.focus(), 0);
         }
@@ -259,12 +274,12 @@ function Workspace({ students, initialEntries, largeFixture }: { students: Stude
     };
     window.addEventListener("keydown", close);
     return () => window.removeEventListener("keydown", close);
-  }, [formOpen, formReturnCaseId, batchFormOpen, batchHasChanges, studentId, caseId, caseReturnStudentId]);
+  }, [formOpen, formReturnCaseId, batchFormOpen, batchHasChanges, bulkUpdateOpen, studentId, caseId, caseReturnStudentId]);
   useEffect(() => {
     const openWithShortcut = (event: KeyboardEvent) => {
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
         event.preventDefault();
-        if (formOpen || batchFormOpen || studentId || caseId) return;
+        if (formOpen || batchFormOpen || bulkUpdateOpen || studentId || caseId) return;
         setGlobalSearchOpen(true); globalSearchInputRef.current?.focus();
       }
     };
@@ -277,9 +292,9 @@ function Workspace({ students, initialEntries, largeFixture }: { students: Stude
       window.removeEventListener("keydown", openWithShortcut);
       window.removeEventListener("pointerdown", closeWhenOutside);
     };
-  }, [formOpen, batchFormOpen, studentId, caseId]);
+  }, [formOpen, batchFormOpen, bulkUpdateOpen, studentId, caseId]);
 
-  const modalOpen = formOpen || batchFormOpen || !!studentId || !!caseId;
+  const modalOpen = formOpen || batchFormOpen || bulkUpdateOpen || !!studentId || !!caseId;
   useEffect(() => {
     if (!modalOpen) return;
     const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
@@ -300,7 +315,7 @@ function Workspace({ students, initialEntries, largeFixture }: { students: Stude
   useEffect(() => {
     if (!modalOpen) return;
     document.querySelector<HTMLElement>('.overlay [role="dialog"] button')?.focus({ preventScroll: true });
-  }, [modalOpen, formOpen, batchFormOpen, studentId, caseId]);
+  }, [modalOpen, formOpen, batchFormOpen, bulkUpdateOpen, studentId, caseId]);
 
   const studentMap = useMemo(() => new Map(students.map((s) => [s.id, s])), [students]);
   const classes = ["全部班級", ...new Set(students.map((s) => s.className))];
@@ -344,6 +359,10 @@ function Workspace({ students, initialEntries, largeFixture }: { students: Stude
     return b.date.localeCompare(a.date) || a.id.localeCompare(b.id);
   });
   const recordPage = useListPage(shownEntries, JSON.stringify([recordSearch, recordClassFilter, recordKindFilter, recordCategoryFilter, recordStatusFilter, recordAssigneeFilter, recordDateFrom, recordDateTo, recordSort]));
+  const recordSelectedIdSet = new Set(recordSelectedIds);
+  const selectedRecordEntries = entries.filter((entry) => recordSelectedIdSet.has(entry.id));
+  const recordPageAllSelected = recordPage.items.length > 0 && recordPage.items.every((entry) => recordSelectedIdSet.has(entry.id));
+  const bulkUpdateAffectedEntries = selectedRecordEntries.filter((entry) => bulkRecordWouldChange(entry, bulkUpdateDraft));
   const globalQuery = normalizeSearch(globalSearch);
   const allGlobalResults = useMemo(() => {
     if (!globalQuery) return [];
@@ -398,6 +417,45 @@ function Workspace({ students, initialEntries, largeFixture }: { students: Stude
     setRecordSearch(""); setRecordClassFilter("全部班級"); setRecordKindFilter("全部類型"); setRecordCategoryFilter("全部事項");
     setRecordStatusFilter("全部狀態"); setRecordAssigneeFilter(ALL_ASSIGNEES); setRecordDateFrom(""); setRecordDateTo("");
   }
+  function toggleRecordSelection(id: string) {
+    setRecordSelectedIds((current) => current.includes(id) ? current.filter((entryId) => entryId !== id) : [...current, id]);
+  }
+  function toggleVisibleRecords() {
+    setRecordSelectedIds((current) => toggleSelection(current, recordPage.items));
+  }
+  function openBulkUpdate() {
+    if (!selectedRecordEntries.length) return;
+    setBulkUpdateDraft(newBulkRecordUpdate());
+    setBulkUpdateError("");
+    setBulkUpdateStep("edit");
+    setBulkUpdateOpen(true);
+  }
+  function closeBulkUpdate() {
+    setBulkUpdateOpen(false); setBulkUpdateStep("edit"); setBulkUpdateError("");
+  }
+  function reviewBulkUpdate(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!selectedRecordEntries.length) { setBulkUpdateError("所選紀錄已不存在，請返回清單重新選擇。"); return; }
+    if (!hasBulkRecordUpdate(bulkUpdateDraft)) { setBulkUpdateError("請至少選擇一個要統一更新的欄位。"); return; }
+    if (!bulkUpdateAffectedEntries.length) { setBulkUpdateError("所選紀錄已經是相同設定，沒有需要更新的內容。"); return; }
+    setBulkUpdateError(""); setBulkUpdateStep("confirm");
+  }
+  function confirmBulkUpdate() {
+    const result = applyBulkRecordUpdate(entries, recordSelectedIdSet, bulkUpdateDraft);
+    if (!result.changedCount) { setBulkUpdateError("沒有可套用的變更，請返回修改設定。"); setBulkUpdateStep("edit"); return; }
+    setEntries(result.entries);
+    setBulkUpdateUndo({ before: result.before, count: result.changedCount });
+    setRecordSelectedIds([]);
+    closeBulkUpdate();
+    setNotice(`已批次更新 ${result.changedCount} 筆紀錄`);
+  }
+  function undoBulkRecordUpdate() {
+    if (!bulkUpdateUndo) return;
+    setEntries((current) => restoreBulkRecordUpdate(current, bulkUpdateUndo.before));
+    setRecordSelectedIds([]);
+    setNotice(`已復原 ${bulkUpdateUndo.count} 筆批次變更`);
+    setBulkUpdateUndo(null);
+  }
   function exportRecords() {
     const blob = new Blob([serializeRecordCsv(entries, students)], { type: "text/csv;charset=utf-8" });
     const url = URL.createObjectURL(blob);
@@ -426,6 +484,8 @@ function Workspace({ students, initialEntries, largeFixture }: { students: Stude
         return;
       }
       setEntries(imported);
+      setRecordSelectedIds([]);
+      setBulkUpdateUndo(null);
       resetRecordFilters();
       setRecordSort("date-desc");
       recordPage.onPage(1);
@@ -569,6 +629,7 @@ function Workspace({ students, initialEntries, largeFixture }: { students: Stude
       ...(rule ? ruleRecordFields(rule, scoreChange) : {}),
     };
     const now = new Date();
+    setBulkUpdateUndo(null);
     setEntries((current) => current.map((e) => {
       if (e.id !== editingId) return e;
       const corrected = { ...e, ...savedDraft, status: e.status };
@@ -586,10 +647,12 @@ function Workspace({ students, initialEntries, largeFixture }: { students: Stude
     setCaseId(null); setStudentId(caseReturnStudentId); setCaseReturnStudentId(null);
   }
   function saveCasePlan(id: string, assignee: string, dueDate: string) {
+    setBulkUpdateUndo(null);
     setEntries((current) => current.map((e) => e.id === id ? { ...e, assignee: assignee.trim(), dueDate } : e));
     setNotice("跟進安排已儲存");
   }
   function startCase(id: string) {
+    setBulkUpdateUndo(null);
     setEntries((current) => current.map((e) => e.id === id && e.status === "待跟進" ? { ...e, status: "跟進中" } : e));
     setNotice("個案已開始跟進");
   }
@@ -597,17 +660,20 @@ function Workspace({ students, initialEntries, largeFixture }: { students: Stude
     const trimmed = note.trim(); if (!trimmed) return;
     const now = new Date();
     const item: FollowUp = { id: "f" + now.getTime(), date: now.toLocaleDateString("sv-SE"), at: now.toISOString(), author: "訓育組", note: trimmed };
+    setBulkUpdateUndo(null);
     setEntries((current) => current.map((e) => e.id === id && e.status !== "已結案" ? { ...e, status: "跟進中", followUps: [...(e.followUps ?? []), item] } : e));
     setNotice("跟進記錄已加入");
   }
   function closeCase(id: string, summary: string, direct = false) {
     const trimmed = summary.trim(); if (!trimmed) return;
     const now = new Date();
+    setBulkUpdateUndo(null);
     setEntries((current) => current.map((e) => e.id === id ? completeCase(e, trimmed, now, direct) : e));
     setNotice(direct ? "個案已直接完結，原有跟進記錄已保留" : "個案已結案");
   }
   function reopenCase(id: string) {
     const now = new Date();
+    setBulkUpdateUndo(null);
     setEntries((current) => current.map((e) => e.id === id && e.status === "已結案" ? {
       ...e, status: "跟進中", resolution: undefined, closedAt: undefined, closedWithoutFollowUp: false,
       followUps: [...(e.followUps ?? []), {
@@ -666,6 +732,7 @@ function Workspace({ students, initialEntries, largeFixture }: { students: Stude
           </div>}
         </div>
         {page === "records" && recordTransferMessage && <p className={`record-transfer-message ${recordTransferMessage.tone}`} role={recordTransferMessage.tone === "error" ? "alert" : "status"}>{recordTransferMessage.text}<button type="button" aria-label="關閉匯入匯出提示" onClick={() => setRecordTransferMessage(null)}><X size={14}/></button></p>}
+        {page === "records" && bulkUpdateUndo && <div className="bulk-undo-banner" role="status"><span><CheckCircle2 size={17}/><strong>已批次更新 {bulkUpdateUndo.count} 筆紀錄</strong><small>進行其他紀錄修改前，可復原最近一次批次變更。</small></span><button type="button" className="btn secondary" onClick={undoBulkRecordUpdate}><RotateCcw size={15}/>復原批次變更</button></div>}
         {page === "records" && <RecordsDirectory
           entries={recordPage.items}
           pagination={recordPage}
@@ -686,6 +753,8 @@ function Workspace({ students, initialEntries, largeFixture }: { students: Stude
           classes={classes}
           categories={recordCategories}
           assignees={assignees}
+          selectedIds={recordSelectedIdSet}
+          allVisibleSelected={recordPageAllSelected}
           onSearch={setRecordSearch}
           onClassFilterChange={setRecordClassFilter}
           onKindFilterChange={setRecordKindFilter}
@@ -699,6 +768,10 @@ function Workspace({ students, initialEntries, largeFixture }: { students: Stude
           onReset={resetRecordFilters}
           onOpenCase={openCase}
           onEdit={editEntry}
+          onToggleSelection={toggleRecordSelection}
+          onToggleVisible={toggleVisibleRecords}
+          onClearSelection={() => setRecordSelectedIds([])}
+          onBulkUpdate={openBulkUpdate}
         />}
         <footer>校園訓育系統 · 前端介面示範 <span>所有學生及紀錄均為虛構資料</span></footer>
       </main>
@@ -756,6 +829,18 @@ function Workspace({ students, initialEntries, largeFixture }: { students: Stude
       onNextStudents={goToCreateDetails}
       onSubmitDetails={reviewCreateEntries}
       onConfirm={confirmCreateEntries}
+    />}
+    {bulkUpdateOpen && <BulkRecordUpdatePanel
+      step={bulkUpdateStep}
+      draft={bulkUpdateDraft}
+      selectedCount={selectedRecordEntries.length}
+      affectedCount={bulkUpdateAffectedEntries.length}
+      error={bulkUpdateError}
+      onClose={closeBulkUpdate}
+      onDraftChange={(patch) => { setBulkUpdateDraft((current) => ({ ...current, ...patch })); setBulkUpdateError(""); }}
+      onSubmit={reviewBulkUpdate}
+      onBack={() => { setBulkUpdateStep("edit"); setBulkUpdateError(""); }}
+      onConfirm={confirmBulkUpdate}
     />}
     {selectedCase && caseStudent && <CasePanel key={selectedCase.id} entry={selectedCase} student={caseStudent} onClose={closeCaseView} onEdit={() => editEntry(selectedCase)} onSavePlan={saveCasePlan} onStart={startCase} onAddFollowUp={addFollowUp} onCloseCase={closeCase} onReopen={reopenCase}/>}
     {notice && <div className="toast" role="status"><CheckCircle2 size={18}/>{notice}{undoBatch && notice === `已建立 ${undoBatch.count} 筆訓育紀錄` && <button type="button" className="toast-action" onClick={undoLastBatch}>復原</button>}<button type="button" aria-label="關閉通知" onClick={() => { setNotice(""); setUndoBatch(null); }}><X size={14}/></button></div>}
@@ -962,6 +1047,62 @@ function CreateRecordPanel({
   </div>;
 }
 
+function BulkRecordUpdatePanel({ step, draft, selectedCount, affectedCount, error, onClose, onDraftChange, onSubmit, onBack, onConfirm }: {
+  step: BulkUpdateStep;
+  draft: BulkRecordUpdate;
+  selectedCount: number;
+  affectedCount: number;
+  error: string;
+  onClose: () => void;
+  onDraftChange: (patch: Partial<BulkRecordUpdate>) => void;
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+  onBack: () => void;
+  onConfirm: () => void;
+}) {
+  const unchangedCount = selectedCount - affectedCount;
+  return <div className="overlay" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
+    <section className="panel bulk-update-panel" role="dialog" aria-modal="true" aria-labelledby="bulk-update-title">
+      <div className="panel-head"><div><small>BULK UPDATE</small><h2 id="bulk-update-title">批次更新訓育紀錄</h2></div><button type="button" aria-label="關閉批次更新" onClick={onClose}><X size={20}/></button></div>
+      {step === "edit" ? <form className="entry-form" onSubmit={onSubmit}>
+        <div className="panel-body">
+          <div className="bulk-update-count"><ClipboardList size={20}/><span><strong>已選 {selectedCount.toLocaleString()} 筆紀錄</strong><small>勾選要統一修改的欄位；未勾選的內容會保持不變。</small></span></div>
+          <div className="bulk-update-options">
+            <section className={draft.assigneeEnabled ? "active" : ""}>
+              <label><input type="checkbox" checked={draft.assigneeEnabled} onChange={(event) => onDraftChange({ assigneeEnabled: event.target.checked })}/><span><strong>統一指定負責人</strong><small>留空可清除原有負責人</small></span></label>
+              {draft.assigneeEnabled && <input aria-label="批次指定負責人" autoFocus value={draft.assignee} maxLength={60} placeholder="例如：訓育主任" onChange={(event) => onDraftChange({ assignee: event.target.value })}/>}
+            </section>
+            <section className={draft.dueDateEnabled ? "active" : ""}>
+              <label><input type="checkbox" checked={draft.dueDateEnabled} onChange={(event) => onDraftChange({ dueDateEnabled: event.target.checked })}/><span><strong>統一指定跟進期限</strong><small>留空可清除原有期限</small></span></label>
+              {draft.dueDateEnabled && <input aria-label="批次指定跟進期限" type="date" value={draft.dueDate} onChange={(event) => onDraftChange({ dueDate: event.target.value })}/>}
+            </section>
+            <section className={draft.statusEnabled ? "active" : ""}>
+              <label><input type="checkbox" checked={draft.statusEnabled} onChange={(event) => onDraftChange({ statusEnabled: event.target.checked })}/><span><strong>統一指定個案狀態</strong><small>結案或重新開啟都會保留歷史</small></span></label>
+              {draft.statusEnabled && <select aria-label="批次指定個案狀態" value={draft.status} onChange={(event) => onDraftChange({ status: event.target.value as Status })}><option>待跟進</option><option>跟進中</option><option>已結案</option></select>}
+            </section>
+          </div>
+          {error && <p className="batch-error" role="alert">{error}</p>}
+          <p className="form-warning"><ShieldCheck size={16}/>下一步會先顯示實際影響筆數及變更內容；確認前不會修改紀錄。</p>
+        </div>
+        <div className="panel-foot"><button type="button" className="btn secondary" onClick={onClose}>取消</button><button type="submit" className="btn primary">預覽影響筆數 <ArrowRight size={16}/></button></div>
+      </form> : <div className="entry-form">
+        <div className="panel-body">
+          <div className="batch-review-hero"><span><ClipboardList size={23}/></span><div><small>確認批次變更</small><strong>即將更新 {affectedCount.toLocaleString()} 筆紀錄</strong><p>原先選取 {selectedCount.toLocaleString()} 筆{unchangedCount > 0 ? `，其中 ${unchangedCount.toLocaleString()} 筆設定相同，不會重寫` : "，全部都會受影響"}。</p></div></div>
+          <dl className="bulk-update-summary">
+            {draft.assigneeEnabled && <div><dt>負責人</dt><dd>{draft.assignee.trim() || "清除負責人"}</dd></div>}
+            {draft.dueDateEnabled && <div><dt>跟進期限</dt><dd>{draft.dueDate ? dateLabel(draft.dueDate) : "清除跟進期限"}</dd></div>}
+            {draft.statusEnabled && <div><dt>個案狀態</dt><dd>{draft.status}</dd></div>}
+          </dl>
+          {draft.statusEnabled && draft.status === "已結案" && <p className="bulk-update-impact-note">改為「已結案」會加入一筆批次結案歷史；原有跟進資料不會刪除。</p>}
+          {draft.statusEnabled && draft.status !== "已結案" && <p className="bulk-update-impact-note">已結案個案會重新開啟，保留舊結案歷史並加入一筆重新開啟記錄。</p>}
+          <p className="form-warning"><RotateCcw size={16}/>完成後可在紀錄頁復原最近一次批次變更，還原這 {affectedCount.toLocaleString()} 筆紀錄的完整內容。</p>
+          {error && <p className="batch-error" role="alert">{error}</p>}
+        </div>
+        <div className="panel-foot"><button type="button" className="btn secondary" onClick={onBack}>返回修改</button><button type="button" className="btn primary" onClick={onConfirm} disabled={!affectedCount}><Check size={17}/>確認更新 {affectedCount.toLocaleString()} 筆</button></div>
+      </div>}
+    </section>
+  </div>;
+}
+
 function FilterSummary({ labels, onReset }: { labels: string[]; onReset: () => void }) {
   if (!labels.length) return null;
   return <div className="active-filters" aria-label="已套用條件">
@@ -971,7 +1112,7 @@ function FilterSummary({ labels, onReset }: { labels: string[]; onReset: () => v
   </div>;
 }
 
-function RecordsDirectory({ entries, totalCount, pagination, studentMap, search, classFilter, kindFilter, categoryFilter, statusFilter, assigneeFilter, dateFrom, dateTo, dateRangeInvalid, sort, filtersOpen, activeFilters, classes, categories: recordCategories, assignees, onSearch, onClassFilterChange, onKindFilterChange, onCategoryFilterChange, onStatusFilterChange, onAssigneeFilterChange, onDateFromChange, onDateToChange, onSortChange, onFiltersOpenChange, onReset, onOpenCase, onEdit }: {
+function RecordsDirectory({ entries, totalCount, pagination, studentMap, search, classFilter, kindFilter, categoryFilter, statusFilter, assigneeFilter, dateFrom, dateTo, dateRangeInvalid, sort, filtersOpen, activeFilters, classes, categories: recordCategories, assignees, selectedIds, allVisibleSelected, onSearch, onClassFilterChange, onKindFilterChange, onCategoryFilterChange, onStatusFilterChange, onAssigneeFilterChange, onDateFromChange, onDateToChange, onSortChange, onFiltersOpenChange, onReset, onOpenCase, onEdit, onToggleSelection, onToggleVisible, onClearSelection, onBulkUpdate }: {
   entries: Entry[];
   pagination: ListPage;
   totalCount: number;
@@ -991,6 +1132,8 @@ function RecordsDirectory({ entries, totalCount, pagination, studentMap, search,
   classes: string[];
   categories: string[];
   assignees: string[];
+  selectedIds: ReadonlySet<string>;
+  allVisibleSelected: boolean;
   onSearch: (value: string) => void;
   onClassFilterChange: (value: string) => void;
   onKindFilterChange: (value: string) => void;
@@ -1004,6 +1147,10 @@ function RecordsDirectory({ entries, totalCount, pagination, studentMap, search,
   onReset: () => void;
   onOpenCase: (id: string) => void;
   onEdit: (entry: Entry) => void;
+  onToggleSelection: (id: string) => void;
+  onToggleVisible: () => void;
+  onClearSelection: () => void;
+  onBulkUpdate: () => void;
 }) {
   const advancedCount = Number(categoryFilter !== "全部事項") + Number(assigneeFilter !== ALL_ASSIGNEES) + Number(Boolean(dateFrom)) + Number(Boolean(dateTo));
   return <section className="card table-card">
@@ -1016,6 +1163,7 @@ function RecordsDirectory({ entries, totalCount, pagination, studentMap, search,
         </select></label>
         <button type="button" className={"advanced-toggle" + (filtersOpen ? " active" : "")} aria-expanded={filtersOpen} aria-controls="record-advanced-filters" onClick={() => onFiltersOpenChange(!filtersOpen)}><SlidersHorizontal size={15}/>進階篩選{advancedCount > 0 && <b>{advancedCount}</b>}</button>
       </div>
+      {selectedIds.size > 0 && <div className="record-selection-toolbar" role="status"><span><strong>已選 {selectedIds.size.toLocaleString()} 筆紀錄</strong><small>可跨頁及篩選保留選取</small></span><div><button type="button" className="btn secondary" onClick={onClearSelection}>清除選取</button><button type="button" className="btn primary" onClick={onBulkUpdate}>批次更新</button></div></div>}
     </div>
     {filtersOpen && <div className="advanced-filter-panel" id="record-advanced-filters">
       <div className="advanced-filter-head"><div><strong>篩選訓育紀錄</strong><span>所有條件會同時套用</span></div><button type="button" onClick={onReset}><RotateCcw size={14}/>重設</button></div>
@@ -1031,9 +1179,10 @@ function RecordsDirectory({ entries, totalCount, pagination, studentMap, search,
     </div>}
     <div className="persistent-filters"><label className="filter-field"><span>班級</span><select value={classFilter} onChange={(event) => onClassFilterChange(event.target.value)}>{classes.map((item) => <option key={item}>{item}</option>)}</select></label><label className="filter-field"><span>紀錄類型</span><select value={kindFilter} onChange={(event) => onKindFilterChange(event.target.value)}><option>全部類型</option><optgroup label="校本範疇">{SCHOOL_CATEGORIES.map((category) => <option key={category}>{category}</option>)}</optgroup><optgroup label="舊紀錄類型"><option>嘉許</option><option>提醒</option><option>違規</option></optgroup></select></label><label className="filter-field"><span>個案狀態</span><select value={statusFilter} onChange={(event) => onStatusFilterChange(event.target.value)}><option>全部狀態</option><option>待跟進</option><option>跟進中</option><option>已結案</option></select></label></div>
     <FilterSummary labels={activeFilters} onReset={onReset}/>
-    <div className="table-scroll"><table className="records-table"><thead><tr><th>日期 / 學生</th><th>範疇</th><th>事項</th><th>實際加減分</th><th>狀態</th><th>操作</th></tr></thead><tbody>{entries.map((entry) => {
+    <div className="table-scroll"><table className="records-table"><thead><tr><th className="record-select-col"><input type="checkbox" aria-label={allVisibleSelected ? "取消選取本頁紀錄" : "選取本頁紀錄"} checked={allVisibleSelected} onChange={onToggleVisible}/></th><th>日期 / 學生</th><th>範疇</th><th>事項</th><th>實際加減分</th><th>狀態</th><th>操作</th></tr></thead><tbody>{entries.map((entry) => {
       const student = studentMap.get(entry.studentId)!;
-      return <tr key={entry.id}><td><div className="person"><Avatar student={student}/><div><strong>{student.name} <span>· {student.className}</span></strong><small>座號 {student.seat} · {student.number}</small><small>{dateLabel(entry.date)}</small></div></div></td><td data-label="範疇"><KindTag kind={entry.kind}/></td><td className="record-item"><strong>{entry.category}</strong><small className="entry-note">{entry.note}</small></td><td data-label="本次加減分"><strong className="actual-score">{scoreLabel(entry)}</strong></td><td data-label="狀態"><StatusTag status={entry.status}/></td><td><div className="actions"><button type="button" className="row-button" onClick={() => onOpenCase(entry.id)}><ChevronRight size={15}/>詳情</button><button type="button" className="row-button" onClick={() => onEdit(entry)}><FilePenLine size={15}/>編輯</button></div></td></tr>;
+      const selected = selectedIds.has(entry.id);
+      return <tr key={entry.id} className={selected ? "selected" : ""}><td className="record-select-col"><input type="checkbox" aria-label={`選取 ${student.name} 的 ${entry.category} 紀錄`} checked={selected} onChange={() => onToggleSelection(entry.id)}/></td><td><div className="person"><Avatar student={student}/><div><strong>{student.name} <span>· {student.className}</span></strong><small>座號 {student.seat} · {student.number}</small><small>{dateLabel(entry.date)}</small></div></div></td><td data-label="範疇"><KindTag kind={entry.kind}/></td><td className="record-item"><strong>{entry.category}</strong><small className="entry-note">{entry.note}</small></td><td data-label="本次加減分"><strong className="actual-score">{scoreLabel(entry)}</strong></td><td data-label="狀態"><StatusTag status={entry.status}/></td><td><div className="actions"><button type="button" className="row-button" onClick={() => onOpenCase(entry.id)}><ChevronRight size={15}/>詳情</button><button type="button" className="row-button" onClick={() => onEdit(entry)}><FilePenLine size={15}/>編輯</button></div></td></tr>;
     })}</tbody></table>{!entries.length && <Empty text="沒有符合條件的紀錄" hint="可清除條件後重新查看全部紀錄。" onReset={activeFilters.length ? onReset : undefined}/>}</div>
     <ListPagination page={pagination} label="獎懲紀錄"/>
     <div className="list-total-note">全部 {totalCount.toLocaleString()} 筆紀錄 · 未記分表示舊紀錄未有分數，並非 0 分</div>
@@ -1185,4 +1334,3 @@ function CasePanel({ entry, student, onClose, onEdit, onSavePlan, onStart, onAdd
   </div>;
 }
 function Empty({ text, hint, onReset }: { text: string; hint: string; onReset?: () => void }) { return <div className="empty"><Search size={23}/><strong>{text}</strong><p>{hint}</p>{onReset && <button type="button" className="btn secondary" onClick={onReset}><RotateCcw size={14}/>清除條件</button>}</div>; }
-
