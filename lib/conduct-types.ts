@@ -2,8 +2,7 @@ import type { SchoolCategory } from "./school-rules";
 import type { ConductRule } from "./conduct-rules";
 import type { CaseClosure, CaseStatus } from "./case-workflow";
 
-export type LegacyKind = "嘉許" | "提醒" | "違規";
-export type Kind = LegacyKind | SchoolCategory;
+export type Kind = SchoolCategory;
 export type Status = CaseStatus;
 export type Student = { id: string; name: string; className: string; seat: string; number: string };
 export type FollowUp = { id: string; date: string; at?: string; author: string; note: string; type?: "follow-up" | "reopened" };

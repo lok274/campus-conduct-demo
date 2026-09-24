@@ -8,7 +8,7 @@ export const RECORD_EXPORT_VERSION = 1;
 export const MAX_RECORD_IMPORT_BYTES = 5_000_000;
 const MAX_RECORDS = 10_000;
 const SCHOOL_CATEGORIES: readonly SchoolCategory[] = ["守規", "勤學", "勤到"];
-const KINDS = new Set<Kind>(["嘉許", "提醒", "違規", ...SCHOOL_CATEGORIES]);
+const KINDS = new Set<Kind>(SCHOOL_CATEGORIES);
 const STATUSES = new Set<Status>(["待跟進", "跟進中", "已結案"]);
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 const CSV_COLUMNS = [
@@ -137,7 +137,11 @@ function parseEntry(value: unknown, index: number, validStudentIds: ReadonlySet<
     status: status as Status,
   };
   const rule = parseRule(value.rule, label);
+  if (!rule) throw new Error(`${label}沒有校本規則 Code；舊紀錄類型及事項分類已不再支援。`);
+  if (rule.category !== kind) throw new Error(`${label}範疇與規則範疇不一致。`);
+  if (rule.itemName !== entry.category) throw new Error(`${label}事項與規則事項不一致。`);
   const scoreChange = optionalNumber(value.scoreChange, `${label}實際分數`);
+  if (scoreChange === undefined) throw new Error(`${label}沒有實際加減分。`);
   const closedWithoutFollowUp = optionalBoolean(value.closedWithoutFollowUp, `${label}直接結案狀態`);
   const followUps = parseFollowUps(value.followUps, label);
   const closureHistory = parseClosures(value.closureHistory, label);
@@ -148,8 +152,8 @@ function parseEntry(value: unknown, index: number, validStudentIds: ReadonlySet<
     resolution: optionalString(value.resolution, `${label}結案摘要`),
     closedAt: value.closedAt === undefined ? undefined : requiredDate(value.closedAt, `${label}結案日期`),
   };
-  if (rule) entry.rule = rule;
-  if (scoreChange !== undefined) entry.scoreChange = scoreChange;
+  entry.rule = rule;
+  entry.scoreChange = scoreChange;
   if (closedWithoutFollowUp !== undefined) entry.closedWithoutFollowUp = closedWithoutFollowUp;
   if (followUps) entry.followUps = followUps;
   if (closureHistory) entry.closureHistory = closureHistory;

@@ -8,12 +8,12 @@ const entry = {
   id: "r-test",
   studentId: "s1",
   kind: "守規",
-  category: "準時上課",
+  category: "不守課室/特別室規則",
   date: "2026-09-24",
   note: "完整、含逗號與\"引號\"的\n備份測試",
   status: "已結案",
-  rule: { code: "101", category: "守規", subCategory: "課堂常規", itemName: "準時上課", score: 1, minScore: 1, maxScore: 2 },
-  scoreChange: 2,
+  rule: { code: "204", category: "守規", subCategory: "學習/課堂違規", itemName: "不守課室/特別室規則", score: -1, minScore: -3, maxScore: -1 },
+  scoreChange: -1,
   followUps: [{ id: "f1", date: "2026-09-24", at: "2026-09-24T08:00:00.000Z", author: "訓育組", note: "已跟進" }],
   resolution: "已完成",
   closedAt: "2026-09-24",
@@ -32,6 +32,12 @@ test("舊 JSON 備份仍可匯入", () => {
   const text = serializeRecordExport([entry], new Date("2026-09-24T00:00:00.000Z"));
   const imported = parseRecordImport(text, new Set(["s1"]));
   assert.deepEqual(imported, [entry]);
+});
+
+test("匯入拒絕已移除的舊紀錄類型及事項分類", () => {
+  const removedEntry = { ...entry, kind: "嘉許", category: "服務精神", rule: undefined, scoreChange: undefined };
+  const text = serializeRecordExport([removedEntry], new Date("2026-09-24T00:00:00.000Z"));
+  assert.throws(() => parseRecordImport(text, new Set(["s1"])), /範疇不受支援/);
 });
 
 test("CSV 會阻止 Excel 公式注入並在匯入時還原原文", () => {
