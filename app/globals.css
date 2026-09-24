@@ -112,6 +112,7 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 .batch-steps b{width:24px;height:24px;display:grid;place-items:center;flex:none;border-radius:50%;background:#edf2f2;color:#879b9f;font-size:0.875rem}
 .batch-steps .active{background:#eaf5f2;color:#167d75}.batch-steps .active b{background:#177f77;color:#fff}
 .batch-steps .done{color:#5d9188}.batch-steps .done b{background:#dcefeb;color:#147c74}
+.draft-save-status{display:flex;align-items:center;justify-content:center;gap:7px;margin:0;padding:9px 16px;border-bottom:1px solid #e4efed;background:#f3faf8;color:#39766f;font-size:0.875rem;font-weight:700}.draft-save-status svg{flex:none}
 .batch-body{padding-top:22px}
 .batch-student-toolbar{display:grid;grid-template-columns:minmax(150px,.55fr) minmax(220px,1fr);gap:12px;align-items:end}
 .batch-student-toolbar .field{margin-bottom:0}

@@ -21,6 +21,14 @@ type TimelineEvent = {
 type Draft = Pick<Entry, "studentId" | "kind" | "category" | "date" | "note" | "status"> & RuleInput & { needsFollowUp: boolean };
 type CreateDraft = Pick<Entry, "kind" | "category" | "date" | "note"> & RuleInput & { needsFollowUp: boolean; assignee: string; dueDate: string };
 type CreateStep = "students" | "details" | "review";
+type StoredCreateDraft = {
+  draft: CreateDraft;
+  studentIds: string[];
+  step: Exclude<CreateStep, "review">;
+  classFilter: string;
+  skipDuplicates: boolean;
+  savedAt: string;
+};
 type GlobalSearchResult = {
   id: string;
   type: "student" | "record";
@@ -32,6 +40,7 @@ type GlobalSearchResult = {
 };
 const ALL_ASSIGNEES = "__filter_all_assignees__";
 const UNASSIGNED = "__filter_unassigned__";
+const CREATE_DRAFT_STORAGE_KEY = "campus-conduct:create-draft:v1";
 
 const students: Student[] = [
   { id: "s1", name: "陳子晴", className: "中一甲", seat: "03", number: "S260103" },
@@ -66,6 +75,26 @@ const newDraft = (): Draft => ({
 const newCreateDraft = (): CreateDraft => ({
   kind: "嘉許", category: "服務精神", date: currentLocalDate(), note: "", needsFollowUp: true, assignee: "", dueDate: "", code: "", schoolCategory: "", subCategory: "",
 });
+function readStoredCreateDraft(validStudentIds: Set<string>): StoredCreateDraft | null {
+  try {
+    const value = JSON.parse(window.localStorage.getItem(CREATE_DRAFT_STORAGE_KEY) ?? "null") as Partial<StoredCreateDraft> | null;
+    const draft = value?.draft as Partial<CreateDraft> | undefined;
+    if (!draft || typeof draft.date !== "string" || typeof draft.note !== "string" || typeof draft.code !== "string" ||
+      typeof draft.schoolCategory !== "string" || typeof draft.subCategory !== "string" || typeof draft.needsFollowUp !== "boolean" ||
+      typeof draft.assignee !== "string" || typeof draft.dueDate !== "string") return null;
+    const studentIds = Array.isArray(value?.studentIds) ? value.studentIds.filter((id): id is string => typeof id === "string" && validStudentIds.has(id)) : [];
+    return {
+      draft: { ...newCreateDraft(), ...draft },
+      studentIds,
+      step: value?.step === "details" && studentIds.length ? "details" : "students",
+      classFilter: typeof value?.classFilter === "string" ? value.classFilter : "全部班級",
+      skipDuplicates: typeof value?.skipDuplicates === "boolean" ? value.skipDuplicates : true,
+      savedAt: typeof value?.savedAt === "string" ? value.savedAt : "",
+    };
+  } catch {
+    return null;
+  }
+}
 const dateLabel = (date: string) => date.replaceAll("-", "/");
 const assigneeOptionLabel = (value: string) => value === ALL_ASSIGNEES ? "全部負責人" : value === UNASSIGNED ? "未指定" : value;
 const latestActivityDate = (entry: Entry) => {
@@ -160,6 +189,7 @@ function Workspace({ students, initialEntries, largeFixture }: { students: Stude
   const [batchSearch, setBatchSearch] = useState("");
   const [batchSkipDuplicates, setBatchSkipDuplicates] = useState(true);
   const [batchError, setBatchError] = useState("");
+  const [batchDraftStatus, setBatchDraftStatus] = useState("");
   const [undoBatch, setUndoBatch] = useState<{ id: string; count: number } | null>(null);
   const [notice, setNotice] = useState("");
   const [today, setToday] = useState(currentLocalDate);
@@ -176,6 +206,31 @@ function Workspace({ students, initialEntries, largeFixture }: { students: Stude
     return () => window.clearTimeout(timer);
   }, [notice, undoBatch?.id]);
   useEffect(() => {
+    if (!batchFormOpen) return;
+    if (!batchHasChanges) {
+      window.localStorage.removeItem(CREATE_DRAFT_STORAGE_KEY);
+      setBatchDraftStatus("");
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      try {
+        const stored: StoredCreateDraft = {
+          draft: batchDraft,
+          studentIds: batchStudentIds,
+          step: batchStep === "students" ? "students" : "details",
+          classFilter: batchClassFilter,
+          skipDuplicates: batchSkipDuplicates,
+          savedAt: new Date().toISOString(),
+        };
+        window.localStorage.setItem(CREATE_DRAFT_STORAGE_KEY, JSON.stringify(stored));
+        setBatchDraftStatus("草稿已自動儲存 · 只限這個瀏覽器");
+      } catch {
+        setBatchDraftStatus("無法自動儲存草稿，請保持此頁開啟");
+      }
+    }, 300);
+    return () => window.clearTimeout(timer);
+  }, [batchFormOpen, batchHasChanges, batchDraft, batchStudentIds, batchStep, batchClassFilter, batchSkipDuplicates]);
+  useEffect(() => {
     let timer = 0;
     const scheduleNextDay = () => {
       const now = new Date();
@@ -190,10 +245,8 @@ function Workspace({ students, initialEntries, largeFixture }: { students: Stude
     const close = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         if (batchFormOpen) {
-          if (!batchHasChanges || window.confirm("尚未建立的內容會被清除，確定離開？")) {
-            setBatchFormOpen(false); setBatchStep("students"); setBatchError("");
-            window.setTimeout(() => createButtonRef.current?.focus(), 0);
-          }
+          setBatchFormOpen(false); setBatchStep("students"); setBatchError("");
+          window.setTimeout(() => createButtonRef.current?.focus(), 0);
         }
         else if (formOpen) { setFormOpen(false); if (formReturnCaseId) setCaseId(formReturnCaseId); setFormReturnCaseId(null); }
         else if (caseId) { setCaseId(null); setStudentId(caseReturnStudentId); setCaseReturnStudentId(null); }
@@ -375,13 +428,15 @@ function Workspace({ students, initialEntries, largeFixture }: { students: Stude
     }
   }
   function openCreateForm() {
+    const stored = readStoredCreateDraft(new Set(students.map((student) => student.id)));
     setFormReturnCaseId(null);
-    setBatchDraft(newCreateDraft()); setBatchStudentIds([]); setBatchClassFilter("全部班級"); setBatchSearch("");
-    setBatchSkipDuplicates(true); setBatchError(""); setBatchStep("students");
+    setBatchDraft(stored?.draft ?? newCreateDraft()); setBatchStudentIds(stored?.studentIds ?? []);
+    setBatchClassFilter(stored && classes.includes(stored.classFilter) ? stored.classFilter : "全部班級"); setBatchSearch("");
+    setBatchSkipDuplicates(stored?.skipDuplicates ?? true); setBatchError(""); setBatchStep(stored?.step ?? "students");
+    setBatchDraftStatus(stored ? "已恢復上次草稿 · 只限這個瀏覽器" : "");
     setStudentId(null); setCaseId(null); setCaseReturnStudentId(null); setFormOpen(false); setBatchFormOpen(true);
   }
-  function closeCreateForm(skipConfirmation = false) {
-    if (!skipConfirmation && batchHasChanges && !window.confirm("尚未建立的內容會被清除，確定離開？")) return;
+  function closeCreateForm() {
     setBatchFormOpen(false); setBatchStep("students"); setBatchError("");
     window.setTimeout(() => createButtonRef.current?.focus(), 0);
   }
@@ -434,9 +489,11 @@ function Workspace({ students, initialEntries, largeFixture }: { students: Stude
       }),
     }));
     setEntries((current) => [...createdEntries, ...current]);
+    window.localStorage.removeItem(CREATE_DRAFT_STORAGE_KEY);
+    setBatchDraftStatus("");
     setUndoBatch({ id: batchId, count: createdEntries.length });
     setNotice(`已建立 ${createdEntries.length} 筆訓育紀錄`);
-    closeCreateForm(true); resetRecordFilters(); setRecordSort("date-desc"); navigate("records");
+    closeCreateForm(); resetRecordFilters(); setRecordSort("date-desc"); navigate("records");
   }
   function undoLastBatch() {
     if (!undoBatch) return;
@@ -637,6 +694,7 @@ function Workspace({ students, initialEntries, largeFixture }: { students: Stude
       skipDuplicates={batchSkipDuplicates}
       createCount={batchStudentsToCreate.length}
       error={batchError}
+      draftStatus={batchDraftStatus}
       today={today}
       onClose={() => closeCreateForm()}
       onStepChange={(next) => { setBatchError(""); setBatchStep(next); }}
@@ -737,6 +795,7 @@ type CreateRecordPanelProps = {
   skipDuplicates: boolean;
   createCount: number;
   error: string;
+  draftStatus: string;
   today: string;
   onClose: () => void;
   onStepChange: (step: CreateStep) => void;
@@ -754,7 +813,7 @@ type CreateRecordPanelProps = {
 
 function CreateRecordPanel({
   step, draft, visibleStudents, selectedStudents, selectedIds, duplicateIds, allVisibleSelected, pagination,
-  classFilter, search, classes, skipDuplicates, createCount, error, today, onClose, onStepChange,
+  classFilter, search, classes, skipDuplicates, createCount, error, draftStatus, today, onClose, onStepChange,
   onClassFilterChange, onSearch, onToggleStudent, onToggleVisible, onClearSelection, onDraftChange,
   onSkipDuplicatesChange, onNextStudents, onSubmitDetails, onConfirm,
 }: CreateRecordPanelProps) {
@@ -792,6 +851,7 @@ function CreateRecordPanel({
     <section className="panel batch-panel" role="dialog" aria-modal="true" aria-labelledby="batch-form-title" onKeyDown={trapDialogFocus}>
       <div className="panel-head"><div><small>CONDUCT RECORD</small><h2 id="batch-form-title">新增訓育紀錄</h2></div><button type="button" aria-label="關閉新增訓育紀錄" onClick={onClose}><X size={20}/></button></div>
       <div className="batch-steps" aria-label="新增訓育紀錄步驟">{steps.map((item, index) => <div key={item.id} className={(index === stepIndex ? "active" : "") + (index < stepIndex ? " done" : "")}><b>{index < stepIndex ? <Check size={13}/> : index + 1}</b><span>{item.label}</span></div>)}</div>
+      {draftStatus && <p className="draft-save-status" role="status"><CheckCircle2 size={15}/>{draftStatus}</p>}
 
       {step === "students" && <div className="entry-form">
         <div className="panel-body batch-body" ref={stepContentRef}>
@@ -830,7 +890,7 @@ function CreateRecordPanel({
           </div></fieldset>
           {draft.needsFollowUp && <div className="batch-follow-fields"><div className="field-row"><label className="field"><span>負責人</span><input maxLength={40} placeholder="例如：中一級班主任" value={draft.assignee} onChange={(event) => onDraftChange({ assignee: event.target.value })}/></label><label className="field"><span>跟進期限</span><input type="date" min={draft.date} value={draft.dueDate} onChange={(event) => onDraftChange({ dueDate: event.target.value })}/></label></div><small>兩項均可留空，之後可在個案詳情逐筆安排。</small></div>}
           {error && <p className="batch-error" role="alert">{error}</p>}
-          <p className="form-warning"><ShieldCheck size={16}/> 建立後會產生 {selectedStudents.length} 筆獨立紀錄；下一步可再次核對名單及內容。</p>
+          <p className="form-warning"><ShieldCheck size={16}/> 草稿會儲存在這個瀏覽器；正式建立後會自動清除。不要在共用電腦輸入真實學生資料。</p>
         </div>
         <div className="panel-foot"><button type="button" className="btn secondary" onClick={() => onStepChange("students")}>返回選擇</button><button type="submit" className="btn primary" disabled={!selectedRule.rule || !!selectedRule.error}>下一步：核對紀錄 <ArrowRight size={16}/></button></div>
       </form>}
