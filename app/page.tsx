@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent as ReactKeyboardEvent, type RefObject } from "react";
-import { ArrowRight, ArrowUpDown, BookOpenCheck, CalendarDays, Check, CheckCircle2, ChevronDown, ChevronRight, ClipboardList, Clock3, FilePenLine, Filter, LayoutDashboard, Menu, Plus, RotateCcw, Search, ShieldCheck, SlidersHorizontal, Sparkles, UsersRound, X } from "lucide-react";
+import { useEffect, useMemo, useRef, useState, type ChangeEvent, type FormEvent, type KeyboardEvent as ReactKeyboardEvent, type RefObject } from "react";
+import { ArrowRight, ArrowUpDown, BookOpenCheck, CalendarDays, Check, CheckCircle2, ChevronDown, ChevronRight, ClipboardList, Clock3, Download, FilePenLine, Filter, LayoutDashboard, Menu, Plus, RotateCcw, Search, ShieldCheck, SlidersHorizontal, Sparkles, Upload, UsersRound, X } from "lucide-react";
 import { SCHOOL_BASE_SCORES, SCHOOL_CATEGORIES } from "../lib/school-rules";
 import { resolveRuleSelection, ruleRecordFields, type RuleInput } from "../lib/conduct-rules";
 import { RuleDetails, RulePicker } from "../components/rule-picker";
@@ -10,6 +10,7 @@ import type { Student, Entry, FollowUp, Kind, LegacyKind, Status } from "../lib/
 import { duplicateStudentIds, matchesStudent, normalizeSearch, recordSearchText, scoreLabel, studentSearchRank, toggleSelection } from "../lib/list-tools";
 import { ListPagination, useListPage, type ListPage } from "../components/list-pagination";
 import { StudentPicker } from "../components/student-picker";
+import { MAX_RECORD_IMPORT_BYTES, parseRecordImport, serializeRecordExport } from "../lib/record-transfer";
 
 type Page = "dashboard" | "records";
 type RecordSort = "date-desc" | "date-asc" | "updated-desc" | "student-asc" | "status-priority";
@@ -21,6 +22,7 @@ type TimelineEvent = {
 type Draft = Pick<Entry, "studentId" | "kind" | "category" | "date" | "note" | "status"> & RuleInput & { needsFollowUp: boolean };
 type CreateDraft = Pick<Entry, "kind" | "category" | "date" | "note"> & RuleInput & { needsFollowUp: boolean; assignee: string; dueDate: string };
 type CreateStep = "students" | "details" | "review";
+type RecordTransferMessage = { tone: "success" | "error" | "info"; text: string };
 type StoredCreateDraft = {
   draft: CreateDraft;
   studentIds: string[];
@@ -192,8 +194,10 @@ function Workspace({ students, initialEntries, largeFixture }: { students: Stude
   const [batchDraftStatus, setBatchDraftStatus] = useState("");
   const [undoBatch, setUndoBatch] = useState<{ id: string; count: number } | null>(null);
   const [notice, setNotice] = useState("");
+  const [recordTransferMessage, setRecordTransferMessage] = useState<RecordTransferMessage | null>(null);
   const [today, setToday] = useState(currentLocalDate);
   const createButtonRef = useRef<HTMLButtonElement>(null);
+  const recordImportInputRef = useRef<HTMLInputElement>(null);
   const globalSearchRef = useRef<HTMLDivElement>(null);
   const globalSearchInputRef = useRef<HTMLInputElement>(null);
   const batchHasChanges = batchStudentIds.length > 0 || !!batchDraft.code || !!batchDraft.schoolCategory || batchDraft.note.trim() !== "" || batchDraft.kind !== "嘉許" ||
@@ -393,6 +397,41 @@ function Workspace({ students, initialEntries, largeFixture }: { students: Stude
   function resetRecordFilters() {
     setRecordSearch(""); setRecordClassFilter("全部班級"); setRecordKindFilter("全部類型"); setRecordCategoryFilter("全部事項");
     setRecordStatusFilter("全部狀態"); setRecordAssigneeFilter(ALL_ASSIGNEES); setRecordDateFrom(""); setRecordDateTo("");
+  }
+  function exportRecords() {
+    const blob = new Blob([serializeRecordExport(entries)], { type: "application/json;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `campus-conduct-records-${today}.json`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 0);
+    setRecordTransferMessage({ tone: "success", text: `已匯出全部 ${entries.length.toLocaleString()} 筆紀錄；檔案包含跟進及結案歷史。` });
+  }
+  async function importRecords(event: ChangeEvent<HTMLInputElement>) {
+    const input = event.currentTarget;
+    const file = input.files?.[0];
+    if (!file) return;
+    try {
+      if (file.size > MAX_RECORD_IMPORT_BYTES) throw new Error("檔案超過 5 MB，請分拆後再匯入。");
+      const imported = parseRecordImport(await file.text(), new Set(students.map((student) => student.id)));
+      const confirmed = window.confirm(`將以「${file.name}」內的 ${imported.length.toLocaleString()} 筆紀錄，取代目前 ${entries.length.toLocaleString()} 筆紀錄。\n\n學生名冊不會變更；重新整理頁面後仍會回到示範資料。是否繼續？`);
+      if (!confirmed) {
+        setRecordTransferMessage({ tone: "info", text: "已取消匯入，目前紀錄沒有變更。" });
+        return;
+      }
+      setEntries(imported);
+      resetRecordFilters();
+      setRecordSort("date-desc");
+      recordPage.onPage(1);
+      setRecordTransferMessage({ tone: "success", text: `已從「${file.name}」匯入 ${imported.length.toLocaleString()} 筆紀錄並取代目前清單。` });
+    } catch (error) {
+      setRecordTransferMessage({ tone: "error", text: error instanceof Error ? error.message : "無法讀取這個備份檔案。" });
+    } finally {
+      input.value = "";
+    }
   }
   function navigate(next: Page) { setPage(next); setMenuOpen(false); if (next !== page) window.scrollTo({ top: 0 }); }
   function showRecordResults() {
@@ -617,7 +656,13 @@ function Workspace({ students, initialEntries, largeFixture }: { students: Stude
           {page === "dashboard" && <div className="page-actions">
             <button ref={createButtonRef} type="button" className="btn primary" onClick={openCreateForm}><Plus size={17}/>新增紀錄</button>
           </div>}
+          {page === "records" && <div className="page-actions record-transfer-actions">
+            <input ref={recordImportInputRef} className="sr-only" type="file" accept=".json,application/json" aria-label="選擇獎懲紀錄備份檔案" onChange={importRecords}/>
+            <button type="button" className="btn secondary" onClick={exportRecords}><Download size={17}/>匯出備份</button>
+            <button type="button" className="btn secondary" onClick={() => recordImportInputRef.current?.click()}><Upload size={17}/>匯入備份</button>
+          </div>}
         </div>
+        {page === "records" && recordTransferMessage && <p className={`record-transfer-message ${recordTransferMessage.tone}`} role={recordTransferMessage.tone === "error" ? "alert" : "status"}>{recordTransferMessage.text}<button type="button" aria-label="關閉匯入匯出提示" onClick={() => setRecordTransferMessage(null)}><X size={14}/></button></p>}
         {page === "records" && <RecordsDirectory
           entries={recordPage.items}
           pagination={recordPage}
@@ -1137,3 +1182,4 @@ function CasePanel({ entry, student, onClose, onEdit, onSavePlan, onStart, onAdd
   </div>;
 }
 function Empty({ text, hint, onReset }: { text: string; hint: string; onReset?: () => void }) { return <div className="empty"><Search size={23}/><strong>{text}</strong><p>{hint}</p>{onReset && <button type="button" className="btn secondary" onClick={onReset}><RotateCcw size={14}/>清除條件</button>}</div>; }
+
