@@ -12,6 +12,7 @@ import { ListPagination, useListPage, type ListPage } from "../components/list-p
 import { StudentPicker } from "../components/student-picker";
 import { MAX_RECORD_IMPORT_BYTES, RECORD_IMPORT_SIZE_ERROR, mergeRecordImports, parseRecordCsv, parseRecordImport, serializeRecordCsv } from "../lib/record-transfer";
 import { applyBulkRecordUpdate, bulkRecordWouldChange, hasBulkRecordUpdate, restoreBulkRecordUpdate, type BulkRecordUpdate } from "../lib/bulk-record-update";
+import { calendarDatesForView, followUpsForCalendarView, type FollowUpCalendarView } from "../lib/follow-up-calendar";
 
 type Page = "dashboard" | "records";
 type RecordSort = "date-desc" | "date-asc" | "updated-desc" | "student-asc" | "status-priority";
@@ -841,6 +842,7 @@ function Workspace({ students, initialEntries, largeFixture }: { students: Stude
             <button type="button" className="btn secondary" onClick={() => recordImportInputRef.current?.click()}><Upload size={17}/>匯入紀錄</button>
           </div>}
         </div>
+        {page === "dashboard" && <FollowUpCalendar entries={entries} studentMap={studentMap} today={today} onOpenCase={openCase}/>}
         {page === "records" && recordTransferMessage && <p ref={recordTransferMessageRef} className={`record-transfer-message ${recordTransferMessage.tone}`} role={recordTransferMessage.tone === "error" ? "alert" : "status"} tabIndex={recordTransferMessage.tone === "error" ? -1 : undefined}>{recordTransferMessage.text}<button type="button" aria-label="關閉匯入匯出提示" onClick={() => setRecordTransferMessage(null)}><X size={14}/></button></p>}
         {page === "records" && bulkUpdateUndo && <div className="bulk-undo-banner" role="status"><span><CheckCircle2 size={17}/><strong>已批次更新 {bulkUpdateUndo.count} 筆紀錄</strong><small>進行其他紀錄修改前，可復原最近一次批次變更。</small></span><button type="button" className="btn secondary" onClick={undoBulkRecordUpdate}><RotateCcw size={15}/>復原批次變更</button></div>}
         {page === "records" && <RecordsDirectory
@@ -1278,6 +1280,73 @@ function FilterSummary({ labels, onReset }: { labels: string[]; onReset: () => v
     {labels.map((label, index) => <span className="filter-chip" key={index + "-" + label}>{label}</span>)}
     <button type="button" onClick={onReset}><RotateCcw size={13}/>清除全部</button>
   </div>;
+}
+
+const calendarWeekdayFormatter = new Intl.DateTimeFormat("zh-HK", { timeZone: "Asia/Hong_Kong", weekday: "short" });
+const calendarDayFormatter = new Intl.DateTimeFormat("zh-HK", { timeZone: "Asia/Hong_Kong", month: "numeric", day: "numeric" });
+const calendarFullDateFormatter = new Intl.DateTimeFormat("zh-HK", { timeZone: "Asia/Hong_Kong", year: "numeric", month: "long", day: "numeric", weekday: "long" });
+const calendarDisplayDate = (value: string) => new Date(`${value}T12:00:00+08:00`);
+const compareCalendarStudents = (left: Student, right: Student) => left.className.localeCompare(right.className, "zh-Hant", { numeric: true }) || Number(left.seat) - Number(right.seat) || left.name.localeCompare(right.name, "zh-Hant");
+
+function FollowUpCalendar({ entries, studentMap, today, onOpenCase }: {
+  entries: Entry[];
+  studentMap: Map<string, Student>;
+  today: string;
+  onOpenCase: (id: string) => void;
+}) {
+  const [view, setView] = useState<FollowUpCalendarView>("week");
+  const [selectedDate, setSelectedDate] = useState(today);
+  const views: { id: FollowUpCalendarView; label: string }[] = [
+    { id: "overdue", label: "逾期" },
+    { id: "today", label: "今天" },
+    { id: "week", label: "本週" },
+  ];
+  const viewCounts = Object.fromEntries(views.map(({ id }) => [id, followUpsForCalendarView(entries, today, id).length])) as Record<FollowUpCalendarView, number>;
+  const scopedEntries = followUpsForCalendarView(entries, today, view);
+  const dates = calendarDatesForView(entries, today, view);
+  const fallbackDate = view === "overdue" ? dates[0] ?? "" : today;
+  const activeDate = dates.includes(selectedDate) ? selectedDate : fallbackDate;
+  const selectedEntries = scopedEntries.filter((entry) => entry.dueDate === activeDate).sort((left, right) => {
+    const leftStudent = studentMap.get(left.studentId);
+    const rightStudent = studentMap.get(right.studentId);
+    return leftStudent && rightStudent ? compareCalendarStudents(leftStudent, rightStudent) || left.id.localeCompare(right.id) : left.id.localeCompare(right.id);
+  });
+  function selectView(next: FollowUpCalendarView) {
+    const nextDates = calendarDatesForView(entries, today, next);
+    setView(next);
+    setSelectedDate(next === "overdue" ? nextDates[0] ?? "" : today);
+  }
+  return <section className="card followup-calendar" aria-labelledby="followup-calendar-title">
+    <div className="followup-calendar-head">
+      <div><small>FOLLOW-UP CALENDAR</small><h2 id="followup-calendar-title"><CalendarDays size={19}/>跟進行事曆</h2><p>按期限整理未結案個案；沒有設定期限的個案不會顯示。</p></div>
+      <div className="calendar-view-tabs" role="group" aria-label="行事曆檢視">
+        {views.map((item) => <button key={item.id} type="button" aria-pressed={view === item.id} className={view === item.id ? "active" : ""} onClick={() => selectView(item.id)}><span>{item.label}</span><b>{viewCounts[item.id]}</b></button>)}
+      </div>
+    </div>
+    <div className={`calendar-date-grid view-${view}`} aria-label={`${views.find((item) => item.id === view)?.label}期限日期`}>
+      {dates.map((date) => {
+        const count = scopedEntries.filter((entry) => entry.dueDate === date).length;
+        const isToday = date === today;
+        const isOverdue = date < today;
+        return <button key={date} type="button" className={`${activeDate === date ? "selected " : ""}${isToday ? "today " : ""}${isOverdue ? "overdue" : ""}`} aria-pressed={activeDate === date} onClick={() => setSelectedDate(date)}>
+          <time dateTime={date}><span>{calendarWeekdayFormatter.format(calendarDisplayDate(date))}</span><strong>{calendarDayFormatter.format(calendarDisplayDate(date))}</strong></time>
+          <small>{isToday ? "今天" : isOverdue ? "已逾期" : "期限"}</small>
+          <b>{count} 項</b>
+        </button>;
+      })}
+      {!dates.length && <div className="calendar-empty"><CheckCircle2 size={20}/><strong>目前沒有逾期個案</strong><span>所有有期限的未結案個案均未逾期。</span></div>}
+    </div>
+    {activeDate && <section className="calendar-case-section" aria-live="polite">
+      <div className="calendar-case-heading"><div><small>所選日期</small><h3>{calendarFullDateFormatter.format(calendarDisplayDate(activeDate))}</h3></div><span>{selectedEntries.length} 項個案</span></div>
+      {selectedEntries.length ? <div className="calendar-case-list">{selectedEntries.map((entry) => {
+        const student = studentMap.get(entry.studentId);
+        const due = followUpDueMeta(entry, today);
+        return <button key={entry.id} type="button" onClick={() => onOpenCase(entry.id)} aria-label={`查看 ${student?.name ?? "學生"} 的 ${entry.category} 個案`}>
+          {student && <Avatar student={student}/>}<span className="calendar-case-main"><strong>{student?.name ?? "找不到學生資料"}<i>·</i>{entry.category}</strong><small>{student ? `${student.className} · 座號 ${student.seat}` : "學生資料不完整"} · {entry.assignee || "未指定負責人"}</small></span><span className="calendar-case-status"><StatusTag status={entry.status}/><small className={due.tone === "overdue" ? "is-overdue" : ""}>{due.label}</small></span><ChevronRight size={17}/>
+        </button>;
+      })}</div> : <p className="calendar-date-empty"><CalendarDays size={18}/>這一天沒有到期的未結案個案。</p>}
+    </section>}
+  </section>;
 }
 
 function RecordsDirectory({ entries, totalCount, pagination, studentMap, search, classFilter, kindFilter, categoryFilter, statusFilter, assigneeFilter, dateFrom, dateTo, dateRangeError, sort, filtersOpen, activeFilters, classes, categories: recordCategories, assignees, selectedIds, allVisibleSelected, onSearch, onClassFilterChange, onKindFilterChange, onCategoryFilterChange, onStatusFilterChange, onAssigneeFilterChange, onDateFromChange, onDateToChange, onSortChange, onFiltersOpenChange, onReset, onOpenCase, onToggleSelection, onToggleVisible, onClearSelection, onBulkUpdate }: {
