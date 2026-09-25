@@ -6,6 +6,7 @@ import type { SchoolCategory } from "./school-rules";
 export const RECORD_EXPORT_FORMAT = "campus-conduct-records";
 export const RECORD_EXPORT_VERSION = 1;
 export const MAX_RECORD_IMPORT_BYTES = 5_000_000;
+export const RECORD_IMPORT_SIZE_ERROR = "檔案超過 5 MB，無法匯入。目前每次匯入都會取代全部紀錄，不支援分批追加或合併；請改用不超過 5 MB 的完整備份。";
 const MAX_RECORDS = 10_000;
 const SCHOOL_CATEGORIES: readonly SchoolCategory[] = ["守規", "勤學", "勤到"];
 const KINDS = new Set<Kind>(SCHOOL_CATEGORIES);
@@ -172,7 +173,7 @@ export function serializeRecordExport(entries: Entry[], exportedAt = new Date())
 }
 
 export function parseRecordImport(text: string, validStudentIds: ReadonlySet<string>): Entry[] {
-  if (new TextEncoder().encode(text).length > MAX_RECORD_IMPORT_BYTES) throw new Error("檔案超過 5 MB，請分拆後再匯入。");
+  if (new TextEncoder().encode(text).length > MAX_RECORD_IMPORT_BYTES) throw new Error(RECORD_IMPORT_SIZE_ERROR);
   let value: unknown;
   try {
     value = JSON.parse(text);
@@ -293,7 +294,7 @@ export function serializeRecordCsv(entries: Entry[], students: readonly Student[
 }
 
 export function parseRecordCsv(text: string, students: readonly Student[]): Entry[] {
-  if (new TextEncoder().encode(text).length > MAX_RECORD_IMPORT_BYTES) throw new Error("檔案超過 5 MB，請分拆後再匯入。");
+  if (new TextEncoder().encode(text).length > MAX_RECORD_IMPORT_BYTES) throw new Error(RECORD_IMPORT_SIZE_ERROR);
   const rows = parseCsvRows(text);
   const header = rows.shift();
   if (!header || header.length !== CSV_COLUMNS.length || header.some((column, index) => column !== CSV_COLUMNS[index])) {

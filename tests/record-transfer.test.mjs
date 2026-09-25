@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { parseRecordCsv, parseRecordImport, serializeRecordCsv, serializeRecordExport } from "../lib/record-transfer.ts";
+import { MAX_RECORD_IMPORT_BYTES, RECORD_IMPORT_SIZE_ERROR, parseRecordCsv, parseRecordImport, serializeRecordCsv, serializeRecordExport } from "../lib/record-transfer.ts";
 
 const students = [{ id: "s1", name: "陳子晴", className: "中一甲", seat: "03", number: "S260103" }];
 
@@ -56,4 +56,14 @@ test("匯入拒絕任意 CSV 及重複紀錄 ID", () => {
   assert.throws(() => parseRecordCsv("姓名,內容\r\n測試,任意資料", students), /不是本系統匯出/);
   const text = serializeRecordCsv([entry, entry], students, new Date("2026-09-24T00:00:00.000Z"));
   assert.throws(() => parseRecordCsv(text, students), /重複的紀錄 ID/);
+});
+
+test("過大檔案會說明匯入是取代而非分批合併", () => {
+  const oversized = "a".repeat(MAX_RECORD_IMPORT_BYTES + 1);
+  const hasExactMessage = (error) => error instanceof Error && error.message === RECORD_IMPORT_SIZE_ERROR;
+  assert.throws(() => parseRecordImport(oversized, new Set(["s1"])), hasExactMessage);
+  assert.throws(() => parseRecordCsv(oversized, students), hasExactMessage);
+  assert.doesNotMatch(RECORD_IMPORT_SIZE_ERROR, /分拆後再匯入/);
+  assert.match(RECORD_IMPORT_SIZE_ERROR, /取代全部紀錄/);
+  assert.match(RECORD_IMPORT_SIZE_ERROR, /不支援分批追加或合併/);
 });

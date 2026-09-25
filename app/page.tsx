@@ -10,7 +10,7 @@ import type { Student, Entry, FollowUp, Kind, Status } from "../lib/conduct-type
 import { duplicateStudentIds, matchesStudent, normalizeSearch, recordSearchText, scoreLabel, studentSearchRank, toggleSelection } from "../lib/list-tools";
 import { ListPagination, useListPage, type ListPage } from "../components/list-pagination";
 import { StudentPicker } from "../components/student-picker";
-import { MAX_RECORD_IMPORT_BYTES, parseRecordCsv, parseRecordImport, serializeRecordCsv } from "../lib/record-transfer";
+import { MAX_RECORD_IMPORT_BYTES, RECORD_IMPORT_SIZE_ERROR, parseRecordCsv, parseRecordImport, serializeRecordCsv } from "../lib/record-transfer";
 import { applyBulkRecordUpdate, bulkRecordWouldChange, hasBulkRecordUpdate, restoreBulkRecordUpdate, type BulkRecordUpdate } from "../lib/bulk-record-update";
 
 type Page = "dashboard" | "records";
@@ -476,7 +476,7 @@ function Workspace({ students, initialEntries, largeFixture }: { students: Stude
     const file = input.files?.[0];
     if (!file) return;
     try {
-      if (file.size > MAX_RECORD_IMPORT_BYTES) throw new Error("檔案超過 5 MB，請分拆後再匯入。");
+      if (file.size > MAX_RECORD_IMPORT_BYTES) throw new Error(RECORD_IMPORT_SIZE_ERROR);
       const text = await file.text();
       const imported = file.name.toLocaleLowerCase().endsWith(".json")
         ? parseRecordImport(text, new Set(students.map((student) => student.id)))
