@@ -108,6 +108,13 @@ function readStoredCreateDraft(validStudentIds: Set<string>): StoredCreateDraft 
   }
 }
 const dateLabel = (date: string) => date.replaceAll("-", "/");
+const caseUpdatedAtFormatter = new Intl.DateTimeFormat("zh-HK", {
+  timeZone: "Asia/Hong_Kong", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false,
+});
+const caseUpdatedAtLabel = (value: string) => {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? value : caseUpdatedAtFormatter.format(date);
+};
 const assigneeOptionLabel = (value: string) => value === ALL_ASSIGNEES ? "全部負責人" : value === UNASSIGNED ? "未指定" : value;
 const sameRule = (left: Entry["rule"], right: Entry["rule"]) => left?.code === right?.code && left?.category === right?.category &&
   left?.subCategory === right?.subCategory && left?.itemName === right?.itemName && left?.score === right?.score &&
@@ -146,6 +153,15 @@ function followUpDueMeta(entry: Entry, today: string) {
   if (entry.dueDate < today) return { tone: "overdue", label: `逾期 ${daysBetween(entry.dueDate, today)} 日`, date: dateLabel(entry.dueDate) };
   if (entry.dueDate === today) return { tone: "today", label: "今日到期", date: dateLabel(entry.dueDate) };
   return { tone: "upcoming", label: `尚有 ${daysBetween(today, entry.dueDate)} 日`, date: dateLabel(entry.dueDate) };
+}
+function caseNextStep(entry: Entry, today: string) {
+  if (entry.status === "已結案") return "個案已結案，毋須跟進";
+  if (!entry.assignee) return "指定負責人";
+  if (!entry.dueDate) return "設定跟進期限";
+  if (entry.status === "待跟進") return "開始跟進";
+  if (entry.dueDate < today) return "處理逾期跟進並更新記錄";
+  if (entry.dueDate === today) return "今天完成跟進並更新記錄";
+  return "更新跟進記錄或完成結案";
 }
 function buildStudentTimeline(entries: Entry[]): TimelineEvent[] {
   const events: TimelineEvent[] = [];
@@ -985,7 +1001,7 @@ function Workspace({ students, initialEntries, largeFixture }: { students: Stude
       onConfirm={confirmBulkUpdate}
     />}
     {deleteRecordsOpen && <DeleteRecordsPanel entries={selectedRecordEntries} onClose={() => setDeleteRecordsOpen(false)} onConfirm={confirmDeleteRecords}/>}
-    {selectedCase && caseStudent && <CasePanel key={selectedCase.id} entry={selectedCase} student={caseStudent} onClose={closeCaseView} onEdit={() => editEntry(selectedCase)} onSavePlan={saveCasePlan} onStart={startCase} onAddFollowUp={addFollowUp} onCloseCase={closeCase} onReopen={reopenCase}/>}
+    {selectedCase && caseStudent && <CasePanel key={selectedCase.id} entry={selectedCase} student={caseStudent} today={today} onClose={closeCaseView} onEdit={() => editEntry(selectedCase)} onSavePlan={saveCasePlan} onStart={startCase} onAddFollowUp={addFollowUp} onCloseCase={closeCase} onReopen={reopenCase}/>}
     {notice && <div className="toast" role="status"><CheckCircle2 size={18}/>{notice}{undoBatch && notice === `已建立 ${undoBatch.count} 筆訓育紀錄` && <button type="button" className="toast-action" onClick={undoLastBatch}>復原</button>}<button type="button" aria-label="關閉通知" onClick={() => { setNotice(""); setUndoBatch(null); }}><X size={14}/></button></div>}
   </div>;
 }
@@ -1531,8 +1547,8 @@ function StudentTimeline({ events, onOpenCase }: { events: TimelineEvent[]; onOp
     })}
   </ol>;
 }
-function CasePanel({ entry, student, onClose, onEdit, onSavePlan, onStart, onAddFollowUp, onCloseCase, onReopen }: {
-  entry: Entry; student: Student; onClose: () => void; onEdit: () => void;
+function CasePanel({ entry, student, today, onClose, onEdit, onSavePlan, onStart, onAddFollowUp, onCloseCase, onReopen }: {
+  entry: Entry; student: Student; today: string; onClose: () => void; onEdit: () => void;
   onSavePlan: (id: string, assignee: string, dueDate: string) => void;
   onStart: (id: string) => void; onAddFollowUp: (id: string, note: string) => void;
   onCloseCase: (id: string, summary: string, direct?: boolean) => void; onReopen: (id: string) => void;
@@ -1546,6 +1562,7 @@ function CasePanel({ entry, student, onClose, onEdit, onSavePlan, onStart, onAdd
   const isClosed = entry.status === "已結案";
   const canEditRecord = canEditCaseDetails(entry.status);
   const followUps = entry.followUps ?? [];
+  const dueMeta = followUpDueMeta(entry, today);
   const followUpSkipped = isClosed && entry.closedWithoutFollowUp && !followUps.length;
   const hasUnsavedFollowUp = assignee !== (entry.assignee ?? "") || dueDate !== (entry.dueDate ?? "") || !!followUpNote.trim() || !!resolution.trim();
   const hasUnsavedCaseChanges = hasUnsavedFollowUp || !!directCloseReason.trim();
@@ -1601,6 +1618,15 @@ function CasePanel({ entry, student, onClose, onEdit, onSavePlan, onStart, onAdd
       <div className="panel-head"><div><small>CASE DETAILS / 個案跟進</small><h2 id="case-title">個案詳情</h2></div><button type="button" aria-label="關閉個案詳情" onClick={requestClose}><X size={20}/></button></div>
       <div className="panel-body case-body">
         <div className="case-person"><Avatar student={student} large/><div><h3>{student.name}</h3><p>{student.className} · 座號 {student.seat} · 學號 {student.number}</p></div><StatusTag status={entry.status}/></div>
+        <section className="case-summary" aria-labelledby="case-summary-title">
+          <div className="case-summary-head"><h3 id="case-summary-title"><Sparkles size={16}/>個案活動摘要</h3></div>
+          <dl className="case-summary-grid">
+            <div><dt><Clock3 size={15}/>最後更新</dt><dd><time dateTime={entry.updatedAt}>{caseUpdatedAtLabel(entry.updatedAt)}</time></dd></div>
+            <div><dt><UsersRound size={15}/>負責人</dt><dd>{entry.assignee || "未指定"}</dd></div>
+            <div><dt><CalendarDays size={15}/>期限</dt><dd>{entry.dueDate ? <><time dateTime={entry.dueDate}>{dateLabel(entry.dueDate)}</time><small className={`case-summary-due ${dueMeta.tone}`}>{dueMeta.label}</small></> : "未設定"}</dd></div>
+            <div className="case-summary-next"><dt><ArrowRight size={15}/>下一步</dt><dd>{caseNextStep(entry, today)}</dd></div>
+          </dl>
+        </section>
         <div className="case-steps" aria-label="個案流程">
           <span className="active" aria-disabled="true" title="建立紀錄步驟已完成，不能返回">1 建立紀錄</span><span className={followUpSkipped ? "skipped" : entry.status !== "待跟進" ? "active" : ""} aria-current={entry.status === "跟進中" ? "step" : undefined}>{followUpSkipped ? "2 不需跟進" : "2 跟進處理"}</span><span className={isClosed ? "active" : ""} aria-current={isClosed ? "step" : undefined}>3 結案</span>
         </div>

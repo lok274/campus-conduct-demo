@@ -36,6 +36,19 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 .case-person>div{flex:1;min-width:0}
 .case-person h3{margin:0;font-size:1.0625rem}
 .case-person p{margin:4px 0 0;color:#879ca2;font-size:0.875rem}
+.case-summary{margin-top:14px;padding:15px;border:1px solid #cfe5df;border-radius:12px;background:linear-gradient(135deg,#f1faf7 0%,#f8fbfa 100%)}
+.case-summary-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px}
+.case-summary-head h3{display:flex;align-items:center;gap:7px;margin:0;color:#226f68;font-size:0.9375rem}
+.case-summary-head svg{color:#2b9187}
+.case-summary-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;margin:0}
+.case-summary-grid>div{min-width:0;padding:11px 12px;border:1px solid #dcece8;border-radius:9px;background:#fff}
+.case-summary-grid dt{display:flex;align-items:center;gap:6px;margin:0 0 7px;color:#61797d;font-size:0.875rem;font-weight:750}
+.case-summary-grid dt svg{flex:none;color:#55988f}
+.case-summary-grid dd{display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin:0;color:#2f4e55;font-size:0.9375rem;font-weight:850;line-height:1.5;overflow-wrap:anywhere}
+.case-summary-grid time{font:inherit}
+.case-summary-due{padding:2px 6px;border-radius:999px;background:#edf3f3;color:#61777b;font-size:0.75rem;font-weight:800}
+.case-summary-due.overdue{background:#fbe9e6;color:#a24f48}.case-summary-due.today{background:#fff1d5;color:#8a681f}.case-summary-due.upcoming{background:#e6f3f0;color:#247a70}.case-summary-due.completed{background:#e8f4eb;color:#3d7d65}
+.case-summary-next{border-color:#bfe0d8!important;background:#eaf6f2!important}.case-summary-next dd{color:#176f67}
 .case-steps{display:grid;grid-template-columns:repeat(3,1fr);gap:7px;margin:20px 0 24px}
 .case-steps>span,.case-steps>button{display:flex;align-items:center;justify-content:center;gap:5px;padding:10px 6px;border:1px solid transparent;border-radius:8px;background:#f0f4f4;color:#62787c;text-align:center;font-size:.875rem;font-weight:800;line-height:1.5;min-width:0}
 .case-steps>.active{background:#e6f3f0;color:#20867c}
@@ -72,6 +85,7 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 .case-closed-actions{display:flex;flex-wrap:wrap;align-items:center;gap:12px}
 .case-closed-actions>.primary{margin-left:auto}
 @media(max-width:620px){.case-panel{width:100%}.case-steps{gap:4px}.case-steps>button{flex-wrap:wrap}.case-person{flex-wrap:wrap}.case-person .status-tag{margin-left:auto}.case-facts{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:430px){.case-summary{padding:12px}.case-summary-grid{grid-template-columns:1fr}}
 
 /* Student history across cases */
 .timeline-intro{margin:-5px 0 18px;color:#92a5aa;font-size:0.875rem;line-height:1.6}
