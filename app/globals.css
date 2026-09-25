@@ -601,3 +601,14 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
   .card{border-radius:14px}
   .global-search{max-width:185px}
 }
+
+/* Compact record list: keep the item, score and status without redundant detail. */
+.records-table th:nth-child(2),.records-table td:nth-child(2){width:34%}
+.records-table th:nth-child(3),.records-table td:nth-child(3){width:auto}
+.records-table th:nth-child(4),.records-table td:nth-child(4){width:15%}
+.records-table th:nth-child(5),.records-table td:nth-child(5){width:15%}
+
+@media(max-width:1100px){
+  .records-table td:nth-child(2),.records-table td:nth-child(3){grid-column:1/-1;width:auto}
+  .records-table td:nth-child(4),.records-table td:nth-child(5){grid-column:auto;width:auto}
+}
