@@ -776,7 +776,7 @@ function Workspace({ students, initialEntries, largeFixture }: { students: Stude
           </div>}
           {page === "records" && <div className="page-actions record-transfer-actions">
             <input ref={recordImportInputRef} className="sr-only" type="file" accept=".csv,text/csv,.json,application/json" aria-label="選擇獎懲紀錄 CSV 或 JSON 備份檔案" onChange={importRecords}/>
-            <button type="button" className="btn secondary" onClick={exportRecords}><Download size={17}/>匯出 CSV</button>
+            <button type="button" className="btn secondary" onClick={exportRecords}><Download size={17}/>按目前篩選匯出 CSV</button>
             <button type="button" className="btn secondary" onClick={() => recordImportInputRef.current?.click()}><Upload size={17}/>匯入紀錄</button>
           </div>}
         </div>
