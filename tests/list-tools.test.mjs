@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { performance } from "node:perf_hooks";
 import { createLargeSchool } from "./fixtures/large-school.ts";
 import { compareRecordUpdatedDesc, matchesStudent, normalizeSearch, recordDateRangeError, recordSearchText, pageWindow, toggleSelection, duplicateStudentIds, scoreLabel, studentSearchRank } from "../lib/list-tools.ts";
-import { canEditOriginalRecord, completeCase } from "../lib/case-workflow.ts";
+import { canEditCaseDetails, completeCase } from "../lib/case-workflow.ts";
 
 const { students, entries } = createLargeSchool();
 test("independent fixture: 840 unique students / 5,000 linked records", () => {
@@ -86,10 +86,10 @@ test("direct closure keeps existing history; editing closed records does not add
   assert.equal(closed.followUps.length,1); assert.equal(closed.closureHistory.length,2);
   assert.equal(completeCase(closed,"更正",new Date()),closed);
 });
-test("original records stay locked after creation in every case status", () => {
-  assert.equal(canEditOriginalRecord("待跟進"), false);
-  assert.equal(canEditOriginalRecord("跟進中"), false);
-  assert.equal(canEditOriginalRecord("已結案"), false);
+test("only cases in progress allow item detail edits", () => {
+  assert.equal(canEditCaseDetails("待跟進"), false);
+  assert.equal(canEditCaseDetails("跟進中"), true);
+  assert.equal(canEditCaseDetails("已結案"), false);
 });
 test("840 / 5,000 repeated search+pagination remains bounded", () => {
   const map=new Map(students.map(s=>[s.id,s]));
