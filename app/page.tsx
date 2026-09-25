@@ -1437,6 +1437,7 @@ function RecordsDirectory({ entries, totalCount, pagination, studentMap, search,
         </select></label>
         <button type="button" className={"advanced-toggle" + (filtersOpen ? " active" : "")} aria-expanded={filtersOpen} aria-controls="record-advanced-filters" onClick={() => onFiltersOpenChange(!filtersOpen)}><SlidersHorizontal size={15}/>進階篩選{advancedCount > 0 && <b>{advancedCount}</b>}</button>
       </div>
+      {selectedIds.size === 0 && <div className="record-delete-hint" role="note"><Trash2 size={19}/><span><strong>勾選紀錄後即可刪除</strong><small>先勾選清單左側的方格，「刪除紀錄」按鈕便會顯示。</small></span></div>}
       {selectedIds.size > 0 && <div className="record-selection-toolbar" role="status"><span><strong>已選 {selectedIds.size.toLocaleString()} 筆紀錄</strong><small>可跨頁及篩選保留選取</small></span><div><button type="button" className="btn secondary" onClick={onClearSelection}>清除選取</button><button type="button" className="btn primary" onClick={onBulkUpdate}>批次更新</button><button type="button" className="btn danger" onClick={onDelete}><Trash2 size={15}/>刪除紀錄</button></div></div>}
     </div>
     {filtersOpen && <div className="advanced-filter-panel" id="record-advanced-filters">
