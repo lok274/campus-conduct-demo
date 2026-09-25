@@ -13,8 +13,10 @@ type Props = {
   onQuery: (value: string) => void;
   onClass: (value: string) => void;
   onSelect: (id: string) => void;
+  error?: string;
+  id: string;
 };
-function StudentSearch({ students, query, className, onQuery, onClass, onSelect }: Props) {
+function StudentSearch({ students, query, className, onQuery, onClass, onSelect, error, id }: Props) {
   const classes = useMemo(() => [ALL_CLASSES, ...new Set(students.map(student => student.className))], [students]);
   const active = !!normalizeSearch(query) || className !== ALL_CLASSES;
   const matches = useMemo(() => active ? students.filter(student => matchesStudent(student, query, className))
@@ -30,7 +32,7 @@ function StudentSearch({ students, query, className, onQuery, onClass, onSelect 
   return <section className="student-search" aria-label="搜尋並選擇學生">
     <div className="student-search-heading"><h2><UsersRound size={21}/>搜尋並選擇學生</h2></div>
     <div className="student-search-controls">
-      <label><span>學生姓名 / 學號</span><div><Search size={19}/><input aria-label="選擇學生搜尋" placeholder="輸入姓名或完整學號" value={query} onChange={event => onQuery(event.target.value)}/></div></label>
+      <label><span>學生姓名 / 學號</span><div><Search size={19}/><input id={id + "-search"} aria-label="選擇學生搜尋" placeholder="輸入姓名或完整學號" value={query} aria-invalid={Boolean(error)} aria-describedby={error ? id + "-error" : undefined} onChange={event => onQuery(event.target.value)}/></div></label>
       <label><span>班級</span><select aria-label="選擇學生班級" value={className} onChange={event => onClass(event.target.value)}>{classes.map(value => <option key={value}>{value}</option>)}</select></label>
     </div>
     {!active ? <p className="lookup-hint">輸入姓名、學號或選擇班級後，即可查看學生；不會預先選中任何人。</p> : <>
@@ -46,16 +48,16 @@ function StudentSearch({ students, query, className, onQuery, onClass, onSelect 
     </>}
   </section>;
 }
-export function StudentPicker({ students, value, onChange }: { students: Student[]; value: string; onChange: (id: string) => void }) {
+export function StudentPicker({ students, value, onChange, error = "", id = "student-picker" }: { students: Student[]; value: string; onChange: (id: string) => void; error?: string; id?: string }) {
   const selected = students.find(student => student.id === value);
   const [query, setQuery] = useState("");
   const [className, setClassName] = useState(selected?.className ?? ALL_CLASSES);
   const [choosing, setChoosing] = useState(!selected);
   return <div className="student-picker">
     {selected && <div className="selected-student" role="status"><div><small>本次登記學生</small><strong>{selected.name}</strong><p>{selected.className} · 座號 {selected.seat} · 學號 {selected.number}</p></div><button type="button" className="btn secondary" onClick={() => setChoosing(!choosing)}>{choosing ? "收起選擇" : "更改學生"}</button></div>}
-    {choosing && <StudentSearch students={students} query={query} className={className} onQuery={setQuery}
+    {choosing && <StudentSearch students={students} query={query} className={className} onQuery={setQuery} error={error} id={id}
       onClass={next => { setClassName(next); onChange(""); }}
       onSelect={id => { onChange(id); setChoosing(false); }} />}
-    {!selected && <p className="selection-required">尚未選擇學生：請點選名單內的學生姓名，核對身分後才可儲存。</p>}
+    {!selected && (error ? <p id={id + "-error"} className="field-error" role="alert">{error}</p> : <p className="selection-required">尚未選擇學生：請點選名單內的學生姓名，核對身分後才可儲存。</p>)}
   </div>;
 }

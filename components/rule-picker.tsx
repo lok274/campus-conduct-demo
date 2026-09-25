@@ -3,6 +3,8 @@
 import { CONDUCT_RULES, getRuleGroups, getScoreOptions, normalizeRuleCode, resolveRule, resolveRuleSelection, ruleKey, scoreActionLabel, scoreLabel, selectRuleInput, type ConductRule, type RuleInput } from "../lib/conduct-rules";
 import { SCHOOL_CATEGORIES, type SchoolCategory } from "../lib/school-rules";
 
+export type RulePickerErrors = { code?: string; score?: string };
+
 export function RuleDetails({ rule, scoreChange, showSelectedScore = true }: { rule: ConductRule; scoreChange?: number; showSelectedScore?: boolean }) {
   return <div className="rule-details">
     <strong>{rule.itemName}</strong>
@@ -16,13 +18,18 @@ export function RuleDetails({ rule, scoreChange, showSelectedScore = true }: { r
   </div>;
 }
 
-export function RulePicker({ value, onChange, id, required = true }: {
+export function RulePicker({ value, onChange, id, required = true, errors = {} }: {
   value: RuleInput;
   onChange: (value: RuleInput) => void;
   id: string;
   required?: boolean;
+  errors?: RulePickerErrors;
 }) {
-  const { rule, scoreChange, error } = resolveRuleSelection(value);
+  const resolvedCode = resolveRule(value);
+  const selection = resolveRuleSelection(value);
+  const { rule, scoreChange } = selection;
+  const codeError = errors.code || resolvedCode.error;
+  const scoreError = errors.score || (resolvedCode.rule ? selection.error : "");
   const subCategory = value.schoolCategory ? value.subCategory ?? rule?.subCategory ?? "" : "";
   const subCategories = value.schoolCategory ? getRuleGroups(value.schoolCategory) : [];
   const groups = getRuleGroups(value.schoolCategory, subCategory);
@@ -57,17 +64,18 @@ export function RulePicker({ value, onChange, id, required = true }: {
         <option key={ruleKey(item)} value={ruleKey(item)}>{item.code} · {item.itemName}</option>
       )}</optgroup>)}
     </select></label>
-    <label className="field"><span>直接輸入 Code</span><input type="text" value={value.code} required={required} autoComplete="off" autoCapitalize="characters" spellCheck={false} placeholder="例如：101 或 HW" aria-invalid={!!error} aria-describedby={error ? id + "-error" : id + "-help"} onChange={(event) => {
+    <label className="field"><span>直接輸入 Code</span><input id={id + "-code"} type="text" value={value.code} required={required} autoComplete="off" autoCapitalize="characters" spellCheck={false} placeholder="例如：101 或 HW" aria-invalid={!!codeError} aria-describedby={codeError ? id + "-code-error" : id + "-help"} onChange={(event) => {
       const next = { ...value, code: normalizeRuleCode(event.target.value), scoreChange: undefined };
       const matched = resolveRule(next).rule;
       if (matched) selectRule(matched);
       else onChange(next);
     }}/></label>
-    {error && <p id={id + "-error"} className="rule-error" role="alert">{error}</p>}
+    {codeError && <p id={id + "-code-error"} className="field-error" role="alert">{codeError}</p>}
     {rule && <div className="rule-score-picker">
-      <label className="field"><span>本次加減分數 *</span><select value={scoreChange} disabled={rule.minScore === rule.maxScore} aria-invalid={!!error} aria-describedby={`${id}-score-help`} onChange={(event) => onChange({ ...value, scoreChange: Number(event.target.value) })}>
+      <label className="field"><span>本次加減分數 *</span><select id={id + "-score"} value={scoreChange} disabled={rule.minScore === rule.maxScore} aria-invalid={!!scoreError} aria-describedby={scoreError ? `${id}-score-error ${id}-score-help` : `${id}-score-help`} onChange={(event) => onChange({ ...value, scoreChange: Number(event.target.value) })}>
         {getScoreOptions(rule).map((score) => <option key={score} value={score}>{scoreActionLabel(score)}{score === rule.score ? "（預設）" : ""}</option>)}
       </select></label>
+      {scoreError && <p id={`${id}-score-error`} className="field-error" role="alert">{scoreError}</p>}
       <p id={`${id}-score-help`}>{rule.minScore === rule.maxScore ? "此項目為固定分數，不能調整。" : `可選 ${scoreLabel(rule.minScore)} 至 ${scoreLabel(rule.maxScore)} 分，預設為 ${scoreLabel(rule.score)} 分。切換 Code 會使用新項目的預設分數。`}</p>
     </div>}
     <div aria-live="polite">{rule && <RuleDetails rule={rule} scoreChange={scoreChange}/>}</div>

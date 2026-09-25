@@ -62,7 +62,8 @@ export function resolveRuleSelection(value: RuleInput): { rule?: ConductRule; sc
   if (!result.rule || result.error) return result;
   const scoreChange = value.scoreChange ?? result.rule.score;
   if (!Number.isFinite(scoreChange) || !getScoreOptions(result.rule).includes(scoreChange)) {
-    return { ...result, scoreChange, error: `請從允許範圍 ${scoreLabel(result.rule.minScore)} 至 ${scoreLabel(result.rule.maxScore)} 分內選擇本次加減分數。` };
+    const received = Number.isFinite(scoreChange) ? `目前是 ${scoreLabel(scoreChange)} 分` : "目前不是有效數值";
+    return { ...result, scoreChange, error: `分數無效：Code ${result.rule.code} 只允許 ${scoreLabel(result.rule.minScore)} 至 ${scoreLabel(result.rule.maxScore)} 分，${received}。` };
   }
   return { ...result, scoreChange };
 }

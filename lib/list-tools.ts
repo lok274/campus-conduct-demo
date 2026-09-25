@@ -12,8 +12,8 @@ function isValidIsoDate(value: string) {
 }
 
 export function recordDateRangeError(dateFrom: string, dateTo: string) {
-  if (dateFrom && !isValidIsoDate(dateFrom)) return "「開始日期」不是有效日期，請重新選擇。";
-  if (dateTo && !isValidIsoDate(dateTo)) return "「結束日期」不是有效日期，請重新選擇。";
+  if (dateFrom && !isValidIsoDate(dateFrom)) return "「開始日期」無效：日期不存在或格式不完整，請重新選擇。";
+  if (dateTo && !isValidIsoDate(dateTo)) return "「結束日期」無效：日期不存在或格式不完整，請重新選擇。";
   if (dateFrom && dateTo && dateFrom > dateTo) return "日期範圍有誤：「開始日期」不可遲於「結束日期」。";
   return "";
 }
