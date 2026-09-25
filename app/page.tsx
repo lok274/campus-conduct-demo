@@ -877,7 +877,7 @@ function Workspace({ students, initialEntries, largeFixture }: { students: Stude
     </aside>
     {menuOpen && <button type="button" className="scrim" aria-label="關閉選單" onClick={() => setMenuOpen(false)}/>}
     <div className="main" inert={modalOpen}>
-      <header className="topbar"><button type="button" className="mobile-menu" aria-label="開啟選單" onClick={() => setMenuOpen(true)}><Menu size={21}/></button><div className="crumb">校園管理 <ChevronRight size={14}/> <strong>{title}</strong></div><GlobalSearch
+      <header className="topbar"><button type="button" className="mobile-menu" aria-label="開啟選單" onClick={() => setMenuOpen(true)}><Menu size={21}/></button><div className="crumb"><button type="button" className="crumb-home" onClick={() => navigate("dashboard")}>校園管理</button><ChevronRight size={14}/> <strong>{title}</strong></div><GlobalSearch
         query={globalSearch}
         open={globalSearchOpen}
         results={globalResults}

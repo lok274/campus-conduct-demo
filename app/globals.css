@@ -479,6 +479,9 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
   backdrop-filter:blur(16px);
 }
 .crumb{color:#738b87;font-size:.875rem}
+.crumb-home{border:0;background:transparent;color:inherit;padding:4px 2px;border-radius:5px;font:inherit;cursor:pointer}
+.crumb-home:hover{color:#0c7774;text-decoration:underline;text-underline-offset:3px}
+.crumb-home:focus-visible{outline:2px solid #168b82;outline-offset:2px}
 .crumb strong{color:#234a45}
 .global-search{max-width:500px}
 .global-search-control{
