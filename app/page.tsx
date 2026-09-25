@@ -281,7 +281,9 @@ function Workspace({ students, initialEntries, largeFixture }: { students: Stude
           closeCreateForm();
         }
         else if (formOpen) { setFormOpen(false); if (formReturnCaseId) setCaseId(formReturnCaseId); setFormReturnCaseId(null); }
-        else if (caseId) { setCaseId(null); setStudentId(caseReturnStudentId); setCaseReturnStudentId(null); }
+        // CasePanel owns its draft state and handles Escape through the same
+        // guarded close path as its X button and overlay.
+        else if (caseId) return;
         else setStudentId(null);
       }
     };
@@ -1338,14 +1340,34 @@ function CasePanel({ entry, student, onClose, onEdit, onSavePlan, onStart, onAdd
   const followUps = entry.followUps ?? [];
   const followUpSkipped = isClosed && entry.closedWithoutFollowUp && !followUps.length;
   const hasUnsavedFollowUp = assignee !== (entry.assignee ?? "") || dueDate !== (entry.dueDate ?? "") || !!followUpNote.trim() || !!resolution.trim();
+  const hasUnsavedCaseChanges = hasUnsavedFollowUp || !!directCloseReason.trim();
+
+  const confirmDiscardUnsaved = useCallback((action: string, hasChanges = hasUnsavedCaseChanges) => {
+    if (!hasChanges) return true;
+    return window.confirm(`尚未儲存的個案內容會被捨棄；已儲存的紀錄不受影響。確定要${action}嗎？`);
+  }, [hasUnsavedCaseChanges]);
+
+  const requestClose = useCallback(() => {
+    if (confirmDiscardUnsaved("關閉個案詳情")) onClose();
+  }, [confirmDiscardUnsaved, onClose]);
+
+  useEffect(() => {
+    const closeWithEscape = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      requestClose();
+    };
+    window.addEventListener("keydown", closeWithEscape);
+    return () => window.removeEventListener("keydown", closeWithEscape);
+  }, [requestClose]);
 
   function returnToRecord() {
-    if ((hasUnsavedFollowUp || directCloseReason.trim()) && !window.confirm("尚未儲存的跟進內容會被捨棄；已儲存的記錄不受影響。確定返回更正？")) return;
+    if (!confirmDiscardUnsaved("返回更正")) return;
     onEdit();
   }
   function submitDirectClosure(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (hasUnsavedFollowUp && !window.confirm("尚未儲存的跟進內容不會保存。確定直接完結？")) return;
+    if (!confirmDiscardUnsaved("直接完結", hasUnsavedFollowUp)) return;
     onCloseCase(entry.id, directCloseReason.trim() || DIRECT_CLOSURE_REASON, true);
     setDirectCloseOpen(false); setDirectCloseReason("");
     setFollowUpNote(""); setResolution("");
@@ -1365,9 +1387,9 @@ function CasePanel({ entry, student, onClose, onEdit, onSavePlan, onStart, onAdd
     setResolution("");
   }
 
-  return <div className="overlay" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
+  return <div className="overlay" onMouseDown={(event) => { if (event.target === event.currentTarget) requestClose(); }}>
     <section className="panel case-panel" role="dialog" aria-modal="true" aria-labelledby="case-title">
-      <div className="panel-head"><div><small>CASE DETAILS / 個案跟進</small><h2 id="case-title">個案詳情</h2></div><button type="button" aria-label="關閉個案詳情" onClick={onClose}><X size={20}/></button></div>
+      <div className="panel-head"><div><small>CASE DETAILS / 個案跟進</small><h2 id="case-title">個案詳情</h2></div><button type="button" aria-label="關閉個案詳情" onClick={requestClose}><X size={20}/></button></div>
       <div className="panel-body case-body">
         <div className="case-person"><Avatar student={student} large/><div><h3>{student.name}</h3><p>{student.className} · 座號 {student.seat} · 學號 {student.number}</p></div><StatusTag status={entry.status}/></div>
         <div className="case-steps" aria-label="個案流程">
@@ -1398,7 +1420,7 @@ function CasePanel({ entry, student, onClose, onEdit, onSavePlan, onStart, onAdd
           {!isClosed && <form className="case-follow-form" onSubmit={submitFollowUp}><label className="field"><span>新增跟進記錄</span><textarea rows={3} maxLength={500} placeholder="記下聯絡、面談、觀察或下一步…" value={followUpNote} onChange={(event) => setFollowUpNote(event.target.value)} required/></label><button type="submit" className="btn secondary"><Plus size={15}/>加入記錄</button></form>}
         </section>
         <section className="case-section case-closing"><div className="case-section-head"><h3>結案處理</h3></div>
-          {isClosed ? <><p className="case-closed-date">結案日期：{entry.closedAt ? dateLabel(entry.closedAt) : "未有結案日期"}</p><p className="case-description">{entry.resolution || "這筆紀錄沒有結案摘要。"}</p><div className="case-closed-actions"><button type="button" className="btn secondary" onClick={() => onReopen(entry.id)}>重新開啟個案</button><button type="button" className="btn primary" onClick={onClose}>確定</button></div></> : <form onSubmit={submitClosure}><label className="field"><span>處理結果及結案摘要 *</span><textarea rows={3} maxLength={500} placeholder="說明已採取的行動、結果，以及為何可以結案…" value={resolution} onChange={(event) => setResolution(event.target.value)} required/></label><button type="submit" className="btn primary"><Check size={16}/>完成結案</button></form>}
+          {isClosed ? <><p className="case-closed-date">結案日期：{entry.closedAt ? dateLabel(entry.closedAt) : "未有結案日期"}</p><p className="case-description">{entry.resolution || "這筆紀錄沒有結案摘要。"}</p><div className="case-closed-actions"><button type="button" className="btn secondary" onClick={() => onReopen(entry.id)}>重新開啟個案</button><button type="button" className="btn primary" onClick={requestClose}>確定</button></div></> : <form onSubmit={submitClosure}><label className="field"><span>處理結果及結案摘要 *</span><textarea rows={3} maxLength={500} placeholder="說明已採取的行動、結果，以及為何可以結案…" value={resolution} onChange={(event) => setResolution(event.target.value)} required/></label><button type="submit" className="btn primary"><Check size={16}/>完成結案</button></form>}
         </section>
       </div>
       {!isClosed && entry.status === "待跟進" && <div className="panel-foot"><button type="button" className="btn secondary" onClick={() => onStart(entry.id)}>開始跟進</button></div>}
