@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { performance } from "node:perf_hooks";
 import { createLargeSchool } from "./fixtures/large-school.ts";
-import { matchesStudent, normalizeSearch, recordSearchText, pageWindow, toggleSelection, duplicateStudentIds, scoreLabel, studentSearchRank } from "../lib/list-tools.ts";
+import { compareRecordUpdatedDesc, matchesStudent, normalizeSearch, recordSearchText, pageWindow, toggleSelection, duplicateStudentIds, scoreLabel, studentSearchRank } from "../lib/list-tools.ts";
 import { completeCase } from "../lib/case-workflow.ts";
 
 const { students, entries } = createLargeSchool();
@@ -66,10 +66,16 @@ test("actual score preserves zero / decimals and missing score is not zero", () 
   assert.equal(scoreLabel({scoreChange:2}),"+2 分");
   assert.equal(scoreLabel({}),"未記分");
 });
+test("last modified sort uses updatedAt rather than the record or activity date", () => {
+  const oldRecordEditedToday={id:"old",date:"2025-01-01",updatedAt:"2026-09-25T08:00:00.000Z"};
+  const recentRecordNotEdited={id:"recent",date:"2026-09-24",updatedAt:"2026-09-24T08:00:00.000Z"};
+  assert.deepEqual([recentRecordNotEdited,oldRecordEditedToday].sort(compareRecordUpdatedDesc).map(entry=>entry.id),["old","recent"]);
+});
 test("direct closure keeps existing history; editing closed records does not add closure", () => {
   const source={status:"跟進中",followUps:[{note:"已跟進"}],closureHistory:[{id:"old",summary:"上次結案"}]};
   const closed=completeCase(source,"不需跟進",new Date("2026-09-22T08:00:00Z"),true);
   assert.equal(closed.status,"已結案"); assert.equal(closed.closedWithoutFollowUp,true);
+  assert.equal(closed.updatedAt,"2026-09-22T08:00:00.000Z");
   assert.equal(closed.followUps.length,1); assert.equal(closed.closureHistory.length,2);
   assert.equal(completeCase(closed,"更正",new Date()),closed);
 });

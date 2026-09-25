@@ -21,10 +21,10 @@ export function pageWindow(total: number, requestedPage: number, pageSize: numbe
   const start = total ? (page - 1) * pageSize + 1 : 0;
   return { page, pages, start, end: Math.min(page * pageSize, total), total, pageSize };
 }
-export function toggleSelection(current: string[], visible: Student[]) {
-  const ids = new Set(visible.map(student => student.id));
+export function toggleSelection<T extends { id: string }>(current: string[], visible: T[]) {
+  const ids = new Set(visible.map(item => item.id));
   const selected = new Set(current);
-  return visible.length && visible.every(student => selected.has(student.id))
+  return visible.length && visible.every(item => selected.has(item.id))
     ? current.filter(id => !ids.has(id)) : [...new Set([...current, ...ids])];
 }
 export function duplicateStudentIds(entries: Entry[], expected: Pick<Entry, "date" | "kind" | "category" | "rule" | "scoreChange" | "note">) {
@@ -37,4 +37,8 @@ export function duplicateStudentIds(entries: Entry[], expected: Pick<Entry, "dat
 export function scoreLabel(entry: Entry) {
   const score = entry.scoreChange ?? entry.rule?.score;
   return score === undefined ? "未記分" : (score > 0 ? "+" : "") + score + " 分";
+}
+
+export function compareRecordUpdatedDesc(left: Entry, right: Entry) {
+  return right.updatedAt.localeCompare(left.updatedAt) || right.date.localeCompare(left.date) || left.id.localeCompare(right.id);
 }
