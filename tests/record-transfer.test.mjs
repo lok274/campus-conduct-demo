@@ -12,6 +12,7 @@ const entry = {
   date: "2026-09-24",
   note: "完整、含逗號與\"引號\"的\n備份測試",
   status: "已結案",
+  updatedAt: "2026-09-24T09:00:00.000Z",
   rule: { code: "204", category: "守規", subCategory: "學習/課堂違規", itemName: "不守課室/特別室規則", score: -1, minScore: -3, maxScore: -1 },
   scoreChange: -1,
   followUps: [{ id: "f1", date: "2026-09-24", at: "2026-09-24T08:00:00.000Z", author: "訓育組", note: "已跟進" }],
@@ -23,6 +24,7 @@ const entry = {
 test("獎懲紀錄 CSV 可由 Excel 開啟並完整匯出再匯入", () => {
   const text = serializeRecordCsv([entry], students, new Date("2026-09-24T00:00:00.000Z"));
   assert.match(text, /^\uFEFF"備份格式","版本"/);
+  assert.match(text, /"最後修改時間"/);
   assert.match(text, /"陳子晴","中一甲","03","S260103"/);
   const imported = parseRecordCsv(text, students);
   assert.deepEqual(imported, [entry]);
@@ -32,6 +34,29 @@ test("JSON 備份仍可匯入", () => {
   const text = serializeRecordExport([entry], new Date("2026-09-24T00:00:00.000Z"));
   const imported = parseRecordImport(text, new Set(["s1"]));
   assert.deepEqual(imported, [entry]);
+});
+
+test("舊版 JSON 備份會從既有事件推算最後修改時間", () => {
+  const { updatedAt: _updatedAt, ...legacyEntry } = entry;
+  const text = JSON.stringify({ format: "campus-conduct-records", version: 1, exportedAt: "2026-09-24T10:00:00.000Z", entries: [legacyEntry] });
+  const imported = parseRecordImport(text, new Set(["s1"]));
+  assert.equal(imported[0].updatedAt, "2026-09-24T08:00:00.000Z");
+});
+
+test("舊版 CSV 備份仍可匯入並補上最後修改時間", () => {
+  const simpleEntry = { ...entry, note: "舊版 CSV", followUps: undefined, closureHistory: undefined };
+  const current = serializeRecordCsv([simpleEntry], students, new Date("2026-09-24T00:00:00.000Z"));
+  const legacy = current.trimEnd().split("\r\n").map((line, index) => {
+    const withoutUpdatedAt = line.replace(/,"[^"]*"$/, "");
+    return index === 1 ? withoutUpdatedAt.replace('"campus-conduct-records","2"', '"campus-conduct-records","1"') : withoutUpdatedAt;
+  }).join("\r\n") + "\r\n";
+  const imported = parseRecordCsv(legacy, students);
+  assert.equal(imported[0].updatedAt, "2026-09-24T00:00:00.000Z");
+});
+
+test("新版備份拒絕無效的最後修改時間", () => {
+  const text = serializeRecordExport([{ ...entry, updatedAt: "不是時間" }], new Date("2026-09-24T00:00:00.000Z"));
+  assert.throws(() => parseRecordImport(text, new Set(["s1"])), /最後修改時間不是有效時間/);
 });
 
 test("匯入拒絕已移除的舊紀錄類型及事項分類", () => {

@@ -54,7 +54,7 @@ export function applyBulkRecordUpdate(entries: Entry[], selectedIds: ReadonlySet
     let updated = update.statusEnabled ? applyStatus(entry, update.status, now) : entry;
     if (update.assigneeEnabled) updated = { ...updated, assignee: update.assignee.trim() || undefined };
     if (update.dueDateEnabled) updated = { ...updated, dueDate: update.dueDate || undefined };
-    return updated;
+    return { ...updated, updatedAt: now.toISOString() };
   });
   return { entries: updatedEntries, before, changedCount: before.length };
 }

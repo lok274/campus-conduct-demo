@@ -4,7 +4,8 @@ import type { ConductRule } from "./conduct-rules";
 import type { SchoolCategory } from "./school-rules";
 
 export const RECORD_EXPORT_FORMAT = "campus-conduct-records";
-export const RECORD_EXPORT_VERSION = 1;
+export const RECORD_EXPORT_VERSION = 2;
+const LEGACY_RECORD_EXPORT_VERSION = 1;
 export const MAX_RECORD_IMPORT_BYTES = 5_000_000;
 export const RECORD_IMPORT_SIZE_ERROR = "檔案超過 5 MB，無法匯入。請把資料整理成多個不超過 5 MB 的本系統備份，再逐一使用「追加／合併」匯入；系統會按紀錄 ID 更新或新增，不會重複登記。";
 const MAX_RECORDS = 10_000;
@@ -12,12 +13,13 @@ const SCHOOL_CATEGORIES: readonly SchoolCategory[] = ["守規", "勤學", "勤�
 const KINDS = new Set<Kind>(SCHOOL_CATEGORIES);
 const STATUSES = new Set<Status>(["待跟進", "跟進中", "已結案"]);
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
-const CSV_COLUMNS = [
+const CSV_COLUMNS_V1 = [
   "備份格式", "版本", "匯出時間", "紀錄ID", "學生ID", "學生姓名", "班別", "座號", "學號",
   "日期", "範疇", "事項", "內容", "狀態", "規則Code", "規則範疇", "規則分類", "規則事項",
   "規則預設分數", "規則最低分數", "規則最高分數", "實際加減分", "直接結案", "批次ID",
   "負責人", "跟進期限", "跟進歷史JSON", "結案摘要", "結案日期", "結案歷史JSON",
 ] as const;
+const CSV_COLUMNS = [...CSV_COLUMNS_V1, "最後修改時間"] as const;
 
 export type RecordMergeResult = {
   entries: Entry[];
@@ -93,6 +95,23 @@ function requiredDate(value: unknown, label: string) {
   return date;
 }
 
+function requiredTimestamp(value: unknown, label: string) {
+  const timestamp = requiredString(value, label, 100);
+  const parsed = new Date(timestamp);
+  if (Number.isNaN(parsed.getTime())) throw new Error(`${label}不是有效時間。`);
+  return parsed.toISOString();
+}
+
+function inferLegacyUpdatedAt(entry: Entry) {
+  const candidates = [
+    `${entry.date}T00:00:00.000Z`,
+    ...(entry.closedAt ? [`${entry.closedAt}T00:00:00.000Z`] : []),
+    ...(entry.followUps ?? []).map((item) => item.at ? new Date(item.at).toISOString() : `${item.date}T00:00:00.000Z`),
+    ...(entry.closureHistory ?? []).map((item) => item.at ? new Date(item.at).toISOString() : `${item.date}T00:00:00.000Z`),
+  ];
+  return candidates.sort((left, right) => right.localeCompare(left))[0];
+}
+
 function optionalBoolean(value: unknown, label: string) {
   if (value === undefined) return undefined;
   if (typeof value !== "boolean") throw new Error(`${label}格式不正確。`);
@@ -139,7 +158,7 @@ function parseFollowUps(value: unknown, label: string): FollowUp[] | undefined {
       author: requiredString(item.author, `${itemLabel}作者`, 200),
       note: requiredString(item.note, `${itemLabel}內容`),
     };
-    const at = optionalString(item.at, `${itemLabel}時間`, 100);
+    const at = item.at === undefined ? undefined : requiredTimestamp(item.at, `${itemLabel}時間`);
     if (at !== undefined) followUp.at = at;
     if (type !== undefined) followUp.type = type;
     return followUp;
@@ -157,13 +176,13 @@ function parseClosures(value: unknown, label: string): CaseClosure[] | undefined
       date: requiredDate(item.date, `${itemLabel}日期`),
       summary: requiredString(item.summary, `${itemLabel}摘要`),
     };
-    const at = optionalString(item.at, `${itemLabel}時間`, 100);
+    const at = item.at === undefined ? undefined : requiredTimestamp(item.at, `${itemLabel}時間`);
     if (at !== undefined) closure.at = at;
     return closure;
   });
 }
 
-function parseEntry(value: unknown, index: number, validStudentIds: ReadonlySet<string>): Entry {
+function parseEntry(value: unknown, index: number, validStudentIds: ReadonlySet<string>, version: number): Entry {
   const label = `第 ${index + 1} 筆紀錄`;
   if (!isObject(value)) throw new Error(`${label}格式不正確。`);
   const studentId = requiredString(value.studentId, `${label}學生 ID`, 200);
@@ -180,6 +199,7 @@ function parseEntry(value: unknown, index: number, validStudentIds: ReadonlySet<
     date: requiredDate(value.date, `${label}日期`),
     note: requiredString(value.note, `${label}內容`),
     status: status as Status,
+    updatedAt: "",
   };
   const rule = parseRule(value.rule, label);
   if (!rule) throw new Error(`${label}沒有校本規則 Code；舊紀錄類型及事項分類已不再支援。`);
@@ -205,6 +225,9 @@ function parseEntry(value: unknown, index: number, validStudentIds: ReadonlySet<
   for (const [key, item] of Object.entries(optionalFields)) {
     if (item !== undefined) (entry as unknown as JsonObject)[key] = item;
   }
+  entry.updatedAt = version === RECORD_EXPORT_VERSION
+    ? requiredTimestamp(value.updatedAt, `${label}最後修改時間`)
+    : inferLegacyUpdatedAt(entry);
   return entry;
 }
 
@@ -225,10 +248,10 @@ export function parseRecordImport(text: string, validStudentIds: ReadonlySet<str
     throw new Error("檔案不是有效的 JSON 備份。");
   }
   if (!isObject(value) || value.format !== RECORD_EXPORT_FORMAT) throw new Error("這不是本系統匯出的獎懲紀錄備份。");
-  if (value.version !== RECORD_EXPORT_VERSION) throw new Error("備份版本不受支援，請使用目前版本重新匯出。");
+  if (value.version !== RECORD_EXPORT_VERSION && value.version !== LEGACY_RECORD_EXPORT_VERSION) throw new Error("備份版本不受支援，請使用目前版本重新匯出。");
   if (!Array.isArray(value.entries)) throw new Error("備份中找不到紀錄清單。");
   if (value.entries.length > MAX_RECORDS) throw new Error(`單次最多可匯入 ${MAX_RECORDS.toLocaleString()} 筆紀錄。`);
-  const entries = value.entries.map((entry, index) => parseEntry(entry, index, validStudentIds));
+  const entries = value.entries.map((entry, index) => parseEntry(entry, index, validStudentIds, value.version as number));
   const ids = new Set<string>();
   for (const entry of entries) {
     if (ids.has(entry.id)) throw new Error(`備份內有重複的紀錄 ID：${entry.id}`);
@@ -331,7 +354,7 @@ export function serializeRecordCsv(entries: Entry[], students: readonly Student[
       entry.rule?.code, entry.rule?.category, entry.rule?.subCategory, entry.rule?.itemName, entry.rule?.score,
       entry.rule?.minScore, entry.rule?.maxScore, entry.scoreChange, entry.closedWithoutFollowUp, entry.batchId,
       entry.assignee, entry.dueDate, entry.followUps ? JSON.stringify(entry.followUps) : "", entry.resolution,
-      entry.closedAt, entry.closureHistory ? JSON.stringify(entry.closureHistory) : "",
+      entry.closedAt, entry.closureHistory ? JSON.stringify(entry.closureHistory) : "", entry.updatedAt,
     ].map(csvCell).join(",");
   });
   return `\uFEFF${CSV_COLUMNS.map(csvCell).join(",")}\r\n${rows.join("\r\n")}${rows.length ? "\r\n" : ""}`;
@@ -341,7 +364,12 @@ export function parseRecordCsv(text: string, students: readonly Student[]): Entr
   if (new TextEncoder().encode(text).length > MAX_RECORD_IMPORT_BYTES) throw new Error(RECORD_IMPORT_SIZE_ERROR);
   const rows = parseCsvRows(text);
   const header = rows.shift();
-  if (!header || header.length !== CSV_COLUMNS.length || header.some((column, index) => column !== CSV_COLUMNS[index])) {
+  const csvVersion = header && header.length === CSV_COLUMNS.length && header.every((column, index) => column === CSV_COLUMNS[index])
+    ? RECORD_EXPORT_VERSION
+    : header && header.length === CSV_COLUMNS_V1.length && header.every((column, index) => column === CSV_COLUMNS_V1[index])
+      ? LEGACY_RECORD_EXPORT_VERSION
+      : 0;
+  if (!csvVersion) {
     throw new Error("這不是本系統匯出的獎懲紀錄 CSV，或欄位標題已被更改。");
   }
   if (rows.length > MAX_RECORDS) throw new Error(`單次最多可匯入 ${MAX_RECORDS.toLocaleString()} 筆紀錄。`);
@@ -349,8 +377,9 @@ export function parseRecordCsv(text: string, students: readonly Student[]): Entr
   const entries = rows.map((rawRow, index) => {
     const row = rawRow.map(restoreCsvText);
     const label = `第 ${index + 1} 筆紀錄`;
-    if (row.length !== CSV_COLUMNS.length) throw new Error(`${label}的 CSV 欄位數目不正確。`);
-    if (row[0] !== RECORD_EXPORT_FORMAT || row[1] !== String(RECORD_EXPORT_VERSION)) throw new Error(`${label}的備份格式或版本不受支援。`);
+    const expectedColumns = csvVersion === RECORD_EXPORT_VERSION ? CSV_COLUMNS : CSV_COLUMNS_V1;
+    if (row.length !== expectedColumns.length) throw new Error(`${label}的 CSV 欄位數目不正確。`);
+    if (row[0] !== RECORD_EXPORT_FORMAT || row[1] !== String(csvVersion)) throw new Error(`${label}的備份格式或版本不受支援。`);
     const raw: JsonObject = {
       id: row[3], studentId: row[4], date: row[9], kind: row[10], category: row[11], note: row[12], status: row[13],
     };
@@ -375,7 +404,8 @@ export function parseRecordCsv(text: string, students: readonly Student[]): Entr
     if (row[28]) raw.closedAt = row[28];
     const closureHistory = parseJsonCell(row[29], `${label}結案歷史`);
     if (closureHistory !== undefined) raw.closureHistory = closureHistory;
-    return parseEntry(raw, index, validStudentIds);
+    if (csvVersion === RECORD_EXPORT_VERSION) raw.updatedAt = row[30];
+    return parseEntry(raw, index, validStudentIds, csvVersion);
   });
   assertUniqueEntryIds(entries);
   return entries;

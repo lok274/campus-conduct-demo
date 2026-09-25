@@ -38,3 +38,7 @@ export function scoreLabel(entry: Entry) {
   const score = entry.scoreChange ?? entry.rule?.score;
   return score === undefined ? "未記分" : (score > 0 ? "+" : "") + score + " 分";
 }
+
+export function compareRecordUpdatedDesc(left: Entry, right: Entry) {
+  return right.updatedAt.localeCompare(left.updatedAt) || right.date.localeCompare(left.date) || left.id.localeCompare(right.id);
+}

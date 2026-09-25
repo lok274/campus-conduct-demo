@@ -3,9 +3,9 @@ import assert from "node:assert/strict";
 import { applyBulkRecordUpdate, bulkRecordWouldChange, restoreBulkRecordUpdate } from "../lib/bulk-record-update.ts";
 
 const entries = [
-  { id: "r1", studentId: "s1", kind: "守規", category: "事項", date: "2026-09-20", note: "甲", status: "待跟進", assignee: "舊負責人" },
-  { id: "r2", studentId: "s2", kind: "勤學", category: "事項", date: "2026-09-21", note: "乙", status: "已結案", resolution: "原有結案", closedAt: "2026-09-22", closureHistory: [{ id: "c-old", date: "2026-09-22", summary: "原有結案" }] },
-  { id: "r3", studentId: "s3", kind: "勤到", category: "事項", date: "2026-09-22", note: "丙", status: "跟進中" },
+  { id: "r1", studentId: "s1", kind: "守規", category: "事項", date: "2026-09-20", note: "甲", status: "待跟進", updatedAt: "2026-09-20T08:00:00.000Z", assignee: "舊負責人" },
+  { id: "r2", studentId: "s2", kind: "勤學", category: "事項", date: "2026-09-21", note: "乙", status: "已結案", updatedAt: "2026-09-22T08:00:00.000Z", resolution: "原有結案", closedAt: "2026-09-22", closureHistory: [{ id: "c-old", date: "2026-09-22", summary: "原有結案" }] },
+  { id: "r3", studentId: "s3", kind: "勤到", category: "事項", date: "2026-09-22", note: "丙", status: "跟進中", updatedAt: "2026-09-22T08:00:00.000Z" },
 ];
 
 test("bulk update only changes selected records and restores exact snapshots", () => {
@@ -14,6 +14,7 @@ test("bulk update only changes selected records and restores exact snapshots", (
   assert.equal(result.changedCount, 2);
   assert.equal(result.entries[0].assignee, "訓育主任");
   assert.equal(result.entries[0].dueDate, "2026-10-01");
+  assert.equal(result.entries[0].updatedAt, "2026-09-24T08:00:00.000Z");
   assert.equal(result.entries[1], entries[1]);
   assert.deepEqual(restoreBulkRecordUpdate(result.entries, result.before), entries);
 });
@@ -24,12 +25,14 @@ test("bulk close appends closure history; reopening preserves that history", () 
   assert.equal(closed.status, "已結案");
   assert.equal(closed.resolution, "由批次操作標記為已結案。");
   assert.equal(closed.closureHistory.length, 1);
+  assert.equal(closed.updatedAt, now.toISOString());
 
   const reopened = applyBulkRecordUpdate(entries, new Set(["r2"]), { assigneeEnabled: false, assignee: "", dueDateEnabled: false, dueDate: "", statusEnabled: true, status: "跟進中" }, now).entries[1];
   assert.equal(reopened.status, "跟進中");
   assert.equal(reopened.resolution, undefined);
   assert.equal(reopened.closureHistory.length, 1);
   assert.equal(reopened.followUps.at(-1).type, "reopened");
+  assert.equal(reopened.updatedAt, now.toISOString());
 });
 
 test("preview ignores no-op fields and supports clearing owner or deadline", () => {

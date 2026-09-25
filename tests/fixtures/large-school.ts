@@ -17,6 +17,7 @@ export function createLargeSchool() {
       kind: (["守規", "勤學", "勤到"] as const)[index % 3],
       category: "虛構測試事項 " + (index % 12 + 1),
       date: `2026-09-${String(index % 20 + 1).padStart(2, "0")}`,
+      updatedAt: `2026-09-${String(index % 20 + 1).padStart(2, "0")}T08:00:00.000Z`,
       note: `獨立測試資料 ${index + 1}，不代表任何真實學生事件。`,
       scoreChange: [-3, -0.5, 0, 2][index % 4],
       status: closed ? "已結案" : index % 2 ? "跟進中" : "待跟進",

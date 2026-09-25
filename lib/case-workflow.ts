@@ -2,6 +2,7 @@ export type CaseStatus = "待跟進" | "跟進中" | "已結案";
 export type CaseClosure = { id: string; date: string; at?: string; summary: string };
 type WorkflowRecord = {
   status: CaseStatus;
+  updatedAt?: string;
   resolution?: string;
   closedAt?: string;
   closureHistory?: CaseClosure[];
@@ -18,6 +19,6 @@ export function completeCase<T extends WorkflowRecord>(record: T, summary: strin
   };
   return {
     ...record, status: "已結案", resolution: trimmed, closedAt: closure.date,
-    closedWithoutFollowUp: direct, closureHistory: [...(record.closureHistory ?? []), closure],
+    closedWithoutFollowUp: direct, closureHistory: [...(record.closureHistory ?? []), closure], updatedAt: now.toISOString(),
   };
 }
