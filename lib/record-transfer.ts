@@ -6,7 +6,7 @@ import type { SchoolCategory } from "./school-rules";
 export const RECORD_EXPORT_FORMAT = "campus-conduct-records";
 export const RECORD_EXPORT_VERSION = 1;
 export const MAX_RECORD_IMPORT_BYTES = 5_000_000;
-export const RECORD_IMPORT_SIZE_ERROR = "檔案超過 5 MB，無法匯入。目前每次匯入都會取代全部紀錄，不支援分批追加或合併；請改用不超過 5 MB 的完整備份。";
+export const RECORD_IMPORT_SIZE_ERROR = "檔案超過 5 MB，無法匯入。請把資料整理成多個不超過 5 MB 的本系統備份，再逐一使用「追加／合併」匯入；系統會按紀錄 ID 更新或新增，不會重複登記。";
 const MAX_RECORDS = 10_000;
 const SCHOOL_CATEGORIES: readonly SchoolCategory[] = ["守規", "勤學", "勤到"];
 const KINDS = new Set<Kind>(SCHOOL_CATEGORIES);
@@ -18,6 +18,50 @@ const CSV_COLUMNS = [
   "規則預設分數", "規則最低分數", "規則最高分數", "實際加減分", "直接結案", "批次ID",
   "負責人", "跟進期限", "跟進歷史JSON", "結案摘要", "結案日期", "結案歷史JSON",
 ] as const;
+
+export type RecordMergeResult = {
+  entries: Entry[];
+  addedCount: number;
+  updatedCount: number;
+  unchangedCount: number;
+};
+
+function sameJsonValue(left: unknown, right: unknown): boolean {
+  if (Object.is(left, right)) return true;
+  if (Array.isArray(left) || Array.isArray(right)) {
+    return Array.isArray(left) && Array.isArray(right) && left.length === right.length &&
+      left.every((value, index) => sameJsonValue(value, right[index]));
+  }
+  if (!isObject(left) || !isObject(right)) return false;
+  const leftKeys = Object.keys(left).sort();
+  const rightKeys = Object.keys(right).sort();
+  return leftKeys.length === rightKeys.length && leftKeys.every((key, index) =>
+    key === rightKeys[index] && sameJsonValue(left[key], right[key]));
+}
+
+export function mergeRecordImports(current: readonly Entry[], imported: readonly Entry[]): RecordMergeResult {
+  const importedById = new Map(imported.map((entry) => [entry.id, entry]));
+  const currentIds = new Set(current.map((entry) => entry.id));
+  let updatedCount = 0;
+  let unchangedCount = 0;
+  const mergedCurrent = current.map((entry) => {
+    const incoming = importedById.get(entry.id);
+    if (!incoming) return entry;
+    if (sameJsonValue(entry, incoming)) {
+      unchangedCount += 1;
+      return entry;
+    }
+    updatedCount += 1;
+    return incoming;
+  });
+  const additions = imported.filter((entry) => !currentIds.has(entry.id));
+  return {
+    entries: [...mergedCurrent, ...additions],
+    addedCount: additions.length,
+    updatedCount,
+    unchangedCount,
+  };
+}
 
 type JsonObject = Record<string, unknown>;
 

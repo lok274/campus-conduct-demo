@@ -10,7 +10,7 @@ import type { Student, Entry, FollowUp, Kind, Status } from "../lib/conduct-type
 import { duplicateStudentIds, matchesStudent, normalizeSearch, recordSearchText, scoreLabel, studentSearchRank, toggleSelection } from "../lib/list-tools";
 import { ListPagination, useListPage, type ListPage } from "../components/list-pagination";
 import { StudentPicker } from "../components/student-picker";
-import { MAX_RECORD_IMPORT_BYTES, RECORD_IMPORT_SIZE_ERROR, parseRecordCsv, parseRecordImport, serializeRecordCsv } from "../lib/record-transfer";
+import { MAX_RECORD_IMPORT_BYTES, RECORD_IMPORT_SIZE_ERROR, mergeRecordImports, parseRecordCsv, parseRecordImport, serializeRecordCsv } from "../lib/record-transfer";
 import { applyBulkRecordUpdate, bulkRecordWouldChange, hasBulkRecordUpdate, restoreBulkRecordUpdate, type BulkRecordUpdate } from "../lib/bulk-record-update";
 
 type Page = "dashboard" | "records";
@@ -24,7 +24,9 @@ type Draft = Pick<Entry, "studentId" | "date" | "note" | "status"> & RuleInput &
 type CreateDraft = Pick<Entry, "date" | "note"> & RuleInput & { needsFollowUp: boolean; assignee: string; dueDate: string };
 type CreateStep = "students" | "details" | "review";
 type BulkUpdateStep = "edit" | "confirm";
+type RecordImportMode = "merge" | "replace";
 type RecordTransferMessage = { tone: "success" | "error" | "info"; text: string };
+type PendingRecordImport = { fileName: string; entries: Entry[] };
 type BulkUpdateUndo = { before: Entry[]; count: number };
 type StoredCreateDraft = {
   draft: CreateDraft;
@@ -200,6 +202,8 @@ function Workspace({ students, initialEntries, largeFixture }: { students: Stude
   const [undoBatch, setUndoBatch] = useState<{ id: string; count: number } | null>(null);
   const [notice, setNotice] = useState("");
   const [recordTransferMessage, setRecordTransferMessage] = useState<RecordTransferMessage | null>(null);
+  const [pendingRecordImport, setPendingRecordImport] = useState<PendingRecordImport | null>(null);
+  const [recordImportMode, setRecordImportMode] = useState<RecordImportMode>("merge");
   const [recordSelectedIds, setRecordSelectedIds] = useState<string[]>([]);
   const [bulkUpdateOpen, setBulkUpdateOpen] = useState(false);
   const [bulkUpdateStep, setBulkUpdateStep] = useState<BulkUpdateStep>("edit");
@@ -264,10 +268,13 @@ function Workspace({ students, initialEntries, largeFixture }: { students: Stude
     return () => window.clearTimeout(timer);
   }, []);
   useEffect(() => {
-    if (!formOpen && !batchFormOpen && !bulkUpdateOpen && !studentId && !caseId) return;
+    if (!formOpen && !batchFormOpen && !bulkUpdateOpen && !pendingRecordImport && !studentId && !caseId) return;
     const close = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
-        if (bulkUpdateOpen) {
+        if (pendingRecordImport) {
+          setPendingRecordImport(null);
+        }
+        else if (bulkUpdateOpen) {
           setBulkUpdateOpen(false); setBulkUpdateStep("edit"); setBulkUpdateError("");
         }
         else if (batchFormOpen) {
@@ -280,12 +287,12 @@ function Workspace({ students, initialEntries, largeFixture }: { students: Stude
     };
     window.addEventListener("keydown", close);
     return () => window.removeEventListener("keydown", close);
-  }, [formOpen, formReturnCaseId, batchFormOpen, bulkUpdateOpen, studentId, caseId, caseReturnStudentId, closeCreateForm]);
+  }, [formOpen, formReturnCaseId, batchFormOpen, bulkUpdateOpen, pendingRecordImport, studentId, caseId, caseReturnStudentId, closeCreateForm]);
   useEffect(() => {
     const openWithShortcut = (event: KeyboardEvent) => {
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
         event.preventDefault();
-        if (formOpen || batchFormOpen || bulkUpdateOpen || studentId || caseId) return;
+        if (formOpen || batchFormOpen || bulkUpdateOpen || pendingRecordImport || studentId || caseId) return;
         setGlobalSearchOpen(true); globalSearchInputRef.current?.focus();
       }
     };
@@ -298,9 +305,9 @@ function Workspace({ students, initialEntries, largeFixture }: { students: Stude
       window.removeEventListener("keydown", openWithShortcut);
       window.removeEventListener("pointerdown", closeWhenOutside);
     };
-  }, [formOpen, batchFormOpen, bulkUpdateOpen, studentId, caseId]);
+  }, [formOpen, batchFormOpen, bulkUpdateOpen, pendingRecordImport, studentId, caseId]);
 
-  const modalOpen = formOpen || batchFormOpen || bulkUpdateOpen || !!studentId || !!caseId;
+  const modalOpen = formOpen || batchFormOpen || bulkUpdateOpen || !!pendingRecordImport || !!studentId || !!caseId;
   useEffect(() => {
     if (!modalOpen) return;
     const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
@@ -321,7 +328,7 @@ function Workspace({ students, initialEntries, largeFixture }: { students: Stude
   useEffect(() => {
     if (!modalOpen) return;
     document.querySelector<HTMLElement>('.overlay [role="dialog"] button')?.focus({ preventScroll: true });
-  }, [modalOpen, formOpen, batchFormOpen, bulkUpdateOpen, studentId, caseId]);
+  }, [modalOpen, formOpen, batchFormOpen, bulkUpdateOpen, pendingRecordImport, studentId, caseId]);
 
   const studentMap = useMemo(() => new Map(students.map((s) => [s.id, s])), [students]);
   const classes = ["全部班級", ...new Set(students.map((s) => s.className))];
@@ -481,23 +488,40 @@ function Workspace({ students, initialEntries, largeFixture }: { students: Stude
       const imported = file.name.toLocaleLowerCase().endsWith(".json")
         ? parseRecordImport(text, new Set(students.map((student) => student.id)))
         : parseRecordCsv(text, students);
-      const confirmed = window.confirm(`將以「${file.name}」內的 ${imported.length.toLocaleString()} 筆紀錄，取代目前 ${entries.length.toLocaleString()} 筆紀錄。\n\n學生名冊不會變更；重新整理頁面後仍會回到示範資料。是否繼續？`);
-      if (!confirmed) {
-        setRecordTransferMessage({ tone: "info", text: "已取消匯入，目前紀錄沒有變更。" });
-        return;
-      }
-      setEntries(imported);
-      setRecordSelectedIds([]);
-      setBulkUpdateUndo(null);
-      resetRecordFilters();
-      setRecordSort("date-desc");
-      recordPage.onPage(1);
-      setRecordTransferMessage({ tone: "success", text: `已從「${file.name}」匯入 ${imported.length.toLocaleString()} 筆紀錄並取代目前清單。` });
+      setPendingRecordImport({ fileName: file.name, entries: imported });
+      setRecordImportMode("merge");
+      setRecordTransferMessage(null);
     } catch (error) {
       setRecordTransferMessage({ tone: "error", text: error instanceof Error ? error.message : "無法讀取這個備份檔案。" });
     } finally {
       input.value = "";
     }
+  }
+  function closeRecordImport() {
+    setPendingRecordImport(null);
+  }
+  function confirmRecordImport() {
+    if (!pendingRecordImport) return;
+    const { fileName, entries: imported } = pendingRecordImport;
+    if (recordImportMode === "merge") {
+      const result = mergeRecordImports(entries, imported);
+      if (!result.addedCount && !result.updatedCount) {
+        setRecordTransferMessage({ tone: "info", text: `「${fileName}」沒有需要新增或更新的紀錄；已略過 ${result.unchangedCount.toLocaleString()} 筆相同紀錄。` });
+        closeRecordImport();
+        return;
+      }
+      setEntries(result.entries);
+      setRecordTransferMessage({ tone: "success", text: `已合併「${fileName}」：新增 ${result.addedCount.toLocaleString()} 筆、更新 ${result.updatedCount.toLocaleString()} 筆、略過 ${result.unchangedCount.toLocaleString()} 筆相同紀錄。` });
+    } else {
+      setEntries(imported);
+      setRecordTransferMessage({ tone: "success", text: `已從「${fileName}」匯入 ${imported.length.toLocaleString()} 筆紀錄並取代原有清單。` });
+    }
+    setRecordSelectedIds([]);
+    setBulkUpdateUndo(null);
+    resetRecordFilters();
+    setRecordSort("date-desc");
+    recordPage.onPage(1);
+    closeRecordImport();
   }
   function navigate(next: Page) { setPage(next); setMenuOpen(false); if (next !== page) window.scrollTo({ top: 0 }); }
   function showRecordResults() {
@@ -726,9 +750,9 @@ function Workspace({ students, initialEntries, largeFixture }: { students: Stude
             <button ref={createButtonRef} type="button" className="btn primary" onClick={openCreateForm}><Plus size={17}/>登記訓導紀錄</button>
           </div>}
           {page === "records" && <div className="page-actions record-transfer-actions">
-            <input ref={recordImportInputRef} className="sr-only" type="file" accept=".csv,text/csv,.json,application/json" aria-label="選擇獎懲紀錄 CSV 備份檔案" onChange={importRecords}/>
+            <input ref={recordImportInputRef} className="sr-only" type="file" accept=".csv,text/csv,.json,application/json" aria-label="選擇獎懲紀錄 CSV 或 JSON 備份檔案" onChange={importRecords}/>
             <button type="button" className="btn secondary" onClick={exportRecords}><Download size={17}/>匯出 CSV</button>
-            <button type="button" className="btn secondary" onClick={() => recordImportInputRef.current?.click()}><Upload size={17}/>匯入 CSV</button>
+            <button type="button" className="btn secondary" onClick={() => recordImportInputRef.current?.click()}><Upload size={17}/>匯入紀錄</button>
           </div>}
         </div>
         {page === "records" && recordTransferMessage && <p className={`record-transfer-message ${recordTransferMessage.tone}`} role={recordTransferMessage.tone === "error" ? "alert" : "status"}>{recordTransferMessage.text}<button type="button" aria-label="關閉匯入匯出提示" onClick={() => setRecordTransferMessage(null)}><X size={14}/></button></p>}
@@ -795,6 +819,16 @@ function Workspace({ students, initialEntries, largeFixture }: { students: Stude
         </div><div className="panel-foot entry-form-actions"><button type="button" className="btn secondary" onClick={closeEntryForm}>{formReturnCaseId ? "取消並返回個案" : "取消"}</button><button type="submit" className="btn primary" disabled={!draftStudent || !!draftRule.error || !draftRule.rule}><Check size={17}/>{!draft.needsFollowUp && draft.status !== "已結案" ? "儲存並完結" : formReturnCaseId ? "儲存更正並返回" : "儲存變更"}</button></div></form>
       </section>
     </div>}
+    {pendingRecordImport && <RecordImportPanel
+      fileName={pendingRecordImport.fileName}
+      importedCount={pendingRecordImport.entries.length}
+      currentCount={entries.length}
+      mergeResult={mergeRecordImports(entries, pendingRecordImport.entries)}
+      mode={recordImportMode}
+      onModeChange={setRecordImportMode}
+      onClose={closeRecordImport}
+      onConfirm={confirmRecordImport}
+    />}
     {batchFormOpen && <CreateRecordPanel
       step={batchStep}
       draft={batchDraft}
@@ -839,6 +873,49 @@ function Workspace({ students, initialEntries, largeFixture }: { students: Stude
     />}
     {selectedCase && caseStudent && <CasePanel key={selectedCase.id} entry={selectedCase} student={caseStudent} onClose={closeCaseView} onEdit={() => editEntry(selectedCase)} onSavePlan={saveCasePlan} onStart={startCase} onAddFollowUp={addFollowUp} onCloseCase={closeCase} onReopen={reopenCase}/>}
     {notice && <div className="toast" role="status"><CheckCircle2 size={18}/>{notice}{undoBatch && notice === `已建立 ${undoBatch.count} 筆訓育紀錄` && <button type="button" className="toast-action" onClick={undoLastBatch}>復原</button>}<button type="button" aria-label="關閉通知" onClick={() => { setNotice(""); setUndoBatch(null); }}><X size={14}/></button></div>}
+  </div>;
+}
+
+function RecordImportPanel({ fileName, importedCount, currentCount, mergeResult, mode, onModeChange, onClose, onConfirm }: {
+  fileName: string;
+  importedCount: number;
+  currentCount: number;
+  mergeResult: ReturnType<typeof mergeRecordImports>;
+  mode: RecordImportMode;
+  onModeChange: (mode: RecordImportMode) => void;
+  onClose: () => void;
+  onConfirm: () => void;
+}) {
+  const totalAfterMerge = currentCount + mergeResult.addedCount;
+  return <div className="overlay" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
+    <section className="panel import-panel" role="dialog" aria-modal="true" aria-labelledby="record-import-title">
+      <div className="panel-head"><div><small>IMPORT RECORDS</small><h2 id="record-import-title">選擇匯入方式</h2></div><button type="button" aria-label="關閉匯入紀錄" onClick={onClose}><X size={20}/></button></div>
+      <div className="panel-body import-body">
+        <div className="import-file-summary"><Upload size={20}/><span><strong>{fileName}</strong><small>檔案內有 {importedCount.toLocaleString()} 筆紀錄；目前清單有 {currentCount.toLocaleString()} 筆。</small></span></div>
+        <fieldset className="import-mode-picker"><legend>匯入方式</legend>
+          <label className={mode === "merge" ? "active" : ""}>
+            <input type="radio" name="record-import-mode" checked={mode === "merge"} onChange={() => onModeChange("merge")}/>
+            <span><strong>追加／合併（建議）</strong><small>新 ID 會新增；相同 ID 會更新；其他現有紀錄保留。</small></span>
+          </label>
+          <label className={mode === "replace" ? "active destructive" : "destructive"}>
+            <input type="radio" name="record-import-mode" checked={mode === "replace"} onChange={() => onModeChange("replace")}/>
+            <span><strong>取代全部</strong><small>刪除目前清單，再以此檔案的紀錄完全取代。</small></span>
+          </label>
+        </fieldset>
+        {mode === "merge" ? <div className="import-impact" aria-live="polite">
+          <strong>合併結果預覽</strong><dl>
+            <div><dt>新增</dt><dd>{mergeResult.addedCount.toLocaleString()} 筆</dd></div>
+            <div><dt>更新</dt><dd>{mergeResult.updatedCount.toLocaleString()} 筆</dd></div>
+            <div><dt>相同並略過</dt><dd>{mergeResult.unchangedCount.toLocaleString()} 筆</dd></div>
+            <div><dt>合併後總數</dt><dd>{totalAfterMerge.toLocaleString()} 筆</dd></div>
+          </dl>
+          <p><ShieldCheck size={15}/>系統以紀錄 ID 判斷同一筆資料，不會重複建立相同 ID。</p>
+        </div> : <div className="import-impact destructive" aria-live="polite">
+          <strong>取代結果預覽</strong><p>目前 {currentCount.toLocaleString()} 筆紀錄將被移除，完成後只保留檔案內的 {importedCount.toLocaleString()} 筆。學生名冊不會變更。</p>
+        </div>}
+      </div>
+      <div className="panel-foot"><button type="button" className="btn secondary" onClick={onClose}>取消</button><button type="button" className={mode === "replace" ? "btn danger" : "btn primary"} onClick={onConfirm}><Upload size={16}/>{mode === "merge" ? "追加／合併匯入" : "取代全部紀錄"}</button></div>
+    </section>
   </div>;
 }
 

@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { MAX_RECORD_IMPORT_BYTES, RECORD_IMPORT_SIZE_ERROR, parseRecordCsv, parseRecordImport, serializeRecordCsv, serializeRecordExport } from "../lib/record-transfer.ts";
+import { MAX_RECORD_IMPORT_BYTES, RECORD_IMPORT_SIZE_ERROR, mergeRecordImports, parseRecordCsv, parseRecordImport, serializeRecordCsv, serializeRecordExport } from "../lib/record-transfer.ts";
 
 const students = [{ id: "s1", name: "陳子晴", className: "中一甲", seat: "03", number: "S260103" }];
 
@@ -58,12 +58,23 @@ test("匯入拒絕任意 CSV 及重複紀錄 ID", () => {
   assert.throws(() => parseRecordCsv(text, students), /重複的紀錄 ID/);
 });
 
-test("過大檔案會說明匯入是取代而非分批合併", () => {
+test("過大檔案會引導使用追加／合併匯入", () => {
   const oversized = "a".repeat(MAX_RECORD_IMPORT_BYTES + 1);
   const hasExactMessage = (error) => error instanceof Error && error.message === RECORD_IMPORT_SIZE_ERROR;
   assert.throws(() => parseRecordImport(oversized, new Set(["s1"])), hasExactMessage);
   assert.throws(() => parseRecordCsv(oversized, students), hasExactMessage);
   assert.doesNotMatch(RECORD_IMPORT_SIZE_ERROR, /分拆後再匯入/);
-  assert.match(RECORD_IMPORT_SIZE_ERROR, /取代全部紀錄/);
-  assert.match(RECORD_IMPORT_SIZE_ERROR, /不支援分批追加或合併/);
+  assert.match(RECORD_IMPORT_SIZE_ERROR, /追加／合併/);
+  assert.match(RECORD_IMPORT_SIZE_ERROR, /按紀錄 ID 更新或新增/);
+  assert.match(RECORD_IMPORT_SIZE_ERROR, /不會重複登記/);
+});
+
+test("合併匯入會新增新 ID、更新相同 ID，並略過完全相同紀錄", () => {
+  const existingSecond = { ...entry, id: "r-existing", note: "保留的舊內容" };
+  const updated = { ...entry, id: "r-existing", note: "匯入後的新內容" };
+  const added = { ...entry, id: "r-added", note: "新增內容" };
+  const result = mergeRecordImports([entry, existingSecond], [entry, updated, added]);
+  assert.deepEqual(result.entries, [entry, updated, added]);
+  assert.deepEqual({ added: result.addedCount, updated: result.updatedCount, unchanged: result.unchangedCount }, { added: 1, updated: 1, unchanged: 1 });
+  assert.equal(new Set(result.entries.map((item) => item.id)).size, result.entries.length);
 });
