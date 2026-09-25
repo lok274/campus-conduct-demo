@@ -150,9 +150,9 @@ function focusFirstInvalid(container: HTMLElement | null) {
 function followUpDueMeta(entry: Entry, today: string) {
   if (entry.status === "已結案") return { tone: "completed", label: "已完成", date: entry.closedAt ? dateLabel(entry.closedAt) : "未記錄結案日期" };
   if (!entry.dueDate) return { tone: "unscheduled", label: "未設定期限", date: "請安排跟進日期" };
-  if (entry.dueDate < today) return { tone: "overdue", label: `逾期 ${daysBetween(entry.dueDate, today)} 日`, date: dateLabel(entry.dueDate) };
-  if (entry.dueDate === today) return { tone: "today", label: "今日到期", date: dateLabel(entry.dueDate) };
-  return { tone: "upcoming", label: `尚有 ${daysBetween(today, entry.dueDate)} 日`, date: dateLabel(entry.dueDate) };
+  if (entry.dueDate < today) return { tone: "overdue", label: `已逾期 ${daysBetween(entry.dueDate, today)} 日`, date: dateLabel(entry.dueDate) };
+  if (entry.dueDate === today) return { tone: "today", label: "今天到期", date: dateLabel(entry.dueDate) };
+  return { tone: "upcoming", label: `距離到期 ${daysBetween(today, entry.dueDate)} 日`, date: dateLabel(entry.dueDate) };
 }
 function caseNextStep(entry: Entry, today: string) {
   if (entry.status === "已結案") return "個案已結案，毋須跟進";
@@ -189,6 +189,10 @@ function Avatar({ student, large = false }: { student: Student; large?: boolean 
 }
 function KindTag({ kind }: { kind: Kind }) { return <span className={"kind-tag kind-" + kind}>{kind}</span>; }
 function StatusTag({ status }: { status: Status }) { return <span className={"status-tag " + (status === "待跟進" ? "waiting" : status === "跟進中" ? "progress" : "done")}><i />{status}</span>; }
+function DueAlert({ entry, today, showDate = false }: { entry: Entry; today: string; showDate?: boolean }) {
+  const due = followUpDueMeta(entry, today);
+  return <span className={`due-alert ${due.tone}`}><Clock3 size={13} aria-hidden="true"/><span>{due.label}</span>{showDate && entry.dueDate && <time dateTime={entry.dueDate}> · {dateLabel(entry.dueDate)}</time>}</span>;
+}
 function ValidationNotice({ message, id }: { message: string; id?: string }) {
   const noticeRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -1386,9 +1390,10 @@ function FollowUpCalendar({ entries, studentMap, today, onOpenCase }: {
         const count = scopedEntries.filter((entry) => entry.dueDate === date).length;
         const isToday = date === today;
         const isOverdue = date < today;
-        return <button key={date} type="button" className={`${activeDate === date ? "selected " : ""}${isToday ? "today " : ""}${isOverdue ? "overdue" : ""}`} aria-pressed={activeDate === date} onClick={() => setSelectedDate(date)}>
+        const alertTone = count ? (isOverdue ? "overdue" : "upcoming") : "";
+        return <button key={date} type="button" className={`${activeDate === date ? "selected " : ""}${isToday ? "today " : ""}${alertTone}`} aria-pressed={activeDate === date} onClick={() => setSelectedDate(date)}>
           <time dateTime={date}><span>{calendarWeekdayFormatter.format(calendarDisplayDate(date))}</span><strong>{calendarDayFormatter.format(calendarDisplayDate(date))}</strong></time>
-          <small>{isToday ? "今天" : isOverdue ? "已逾期" : "期限"}</small>
+          <small>{count ? (isToday ? "今天到期" : isOverdue ? "已逾期" : "到期前") : "沒有到期個案"}</small>
           <b>{count} 項</b>
         </button>;
       })}
@@ -1398,9 +1403,8 @@ function FollowUpCalendar({ entries, studentMap, today, onOpenCase }: {
       <div className="calendar-case-heading"><div><small>所選日期</small><h3>{calendarFullDateFormatter.format(calendarDisplayDate(activeDate))}</h3></div><span>{selectedEntries.length} 項個案</span></div>
       {selectedEntries.length ? <div className="calendar-case-list">{selectedEntries.map((entry) => {
         const student = studentMap.get(entry.studentId);
-        const due = followUpDueMeta(entry, today);
         return <button key={entry.id} type="button" onClick={() => onOpenCase(entry.id)} aria-label={`查看 ${student?.name ?? "學生"} 的 ${entry.category} 個案`}>
-          {student && <Avatar student={student}/>}<span className="calendar-case-main"><strong>{student?.name ?? "找不到學生資料"}<i>·</i>{entry.category}</strong><small>{student ? `${student.className} · 座號 ${student.seat}` : "學生資料不完整"} · {entry.assignee || "未指定負責人"}</small></span><span className="calendar-case-status"><StatusTag status={entry.status}/><small className={due.tone === "overdue" ? "is-overdue" : ""}>{due.label}</small></span><ChevronRight size={17}/>
+          {student && <Avatar student={student}/>}<span className="calendar-case-main"><strong>{student?.name ?? "找不到學生資料"}<i>·</i>{entry.category}</strong><small>{student ? `${student.className} · 座號 ${student.seat}` : "學生資料不完整"} · {entry.assignee || "未指定負責人"}</small></span><span className="calendar-case-status"><StatusTag status={entry.status}/><DueAlert entry={entry} today={today}/></span><ChevronRight size={17}/>
         </button>;
       })}</div> : <p className="calendar-date-empty"><CalendarDays size={18}/>這一天沒有到期的未結案個案。</p>}
     </section>}
@@ -1513,11 +1517,10 @@ function StudentOverview({ entries, today, onOpenCase }: { entries: Entry[]; tod
     <p className="overview-description" aria-live="polite">{!entries.length ? "尚未登記任何紀錄，暫無足夠資料整理學生概況。" : !scoped.length ? "此期間沒有新增紀錄，可切換「全部紀錄」查看其他日期的資料。" : `此期間共有 ${scoped.length} 筆紀錄，其中 ${closed} 筆目前已結案、${scoped.length - closed} 筆仍需跟進。`}</p>
     <div className="overview-followup-heading"><h4>目前跟進事項</h4><span>所有日期 · {open.length} 項未結案</span></div>
     {open.length > 0 ? <>
-      <div className="overview-alerts"><span className={overdue ? "is-overdue" : ""}>逾期 {overdue}</span><span>今日到期 {dueToday}</span><span>未設期限 {unscheduled}</span></div>
+      <div className="overview-alerts"><span className={overdue ? "overdue" : ""}>已逾期 {overdue}</span><span className={dueToday ? "today" : ""}>今天到期 {dueToday}</span><span>未設定期限 {unscheduled}</span></div>
       <div className="overview-cases">{open.map((entry) => {
-        const due = followUpDueMeta(entry, today);
         return <button type="button" key={entry.id} onClick={() => onOpenCase(entry.id)} aria-label={`查看${entry.category}個案`}>
-          <span><strong>{entry.category}</strong><small>{entry.assignee || "未指定負責人"} · {entry.status}</small><small className={due.tone === "overdue" ? "is-overdue" : ""}>{due.label}{entry.dueDate ? ` · ${dateLabel(entry.dueDate)}` : ""}</small></span><ChevronRight size={16}/>
+          <span><strong>{entry.category}</strong><small>{entry.assignee || "未指定負責人"} · {entry.status}</small><DueAlert entry={entry} today={today} showDate/></span><ChevronRight size={16}/>
         </button>;
       })}</div>
     </> : <p className="overview-clear"><CheckCircle2 size={16}/>{entries.length ? "目前沒有未結案事項。" : "尚無跟進事項。"}</p>}
@@ -1562,7 +1565,6 @@ function CasePanel({ entry, student, today, onClose, onEdit, onSavePlan, onStart
   const isClosed = entry.status === "已結案";
   const canEditRecord = canEditCaseDetails(entry.status);
   const followUps = entry.followUps ?? [];
-  const dueMeta = followUpDueMeta(entry, today);
   const followUpSkipped = isClosed && entry.closedWithoutFollowUp && !followUps.length;
   const hasUnsavedFollowUp = assignee !== (entry.assignee ?? "") || dueDate !== (entry.dueDate ?? "") || !!followUpNote.trim() || !!resolution.trim();
   const hasUnsavedCaseChanges = hasUnsavedFollowUp || !!directCloseReason.trim();
@@ -1623,7 +1625,7 @@ function CasePanel({ entry, student, today, onClose, onEdit, onSavePlan, onStart
           <dl className="case-summary-grid">
             <div><dt><Clock3 size={15}/>最後更新</dt><dd><time dateTime={entry.updatedAt}>{caseUpdatedAtLabel(entry.updatedAt)}</time></dd></div>
             <div><dt><UsersRound size={15}/>負責人</dt><dd>{entry.assignee || "未指定"}</dd></div>
-            <div><dt><CalendarDays size={15}/>期限</dt><dd>{entry.dueDate ? <><time dateTime={entry.dueDate}>{dateLabel(entry.dueDate)}</time><small className={`case-summary-due ${dueMeta.tone}`}>{dueMeta.label}</small></> : "未設定"}</dd></div>
+            <div><dt><CalendarDays size={15}/>期限</dt><dd>{entry.dueDate && <time dateTime={entry.dueDate}>{dateLabel(entry.dueDate)}</time>}<DueAlert entry={entry} today={today}/></dd></div>
             <div className="case-summary-next"><dt><ArrowRight size={15}/>下一步</dt><dd>{caseNextStep(entry, today)}</dd></div>
           </dl>
         </section>
