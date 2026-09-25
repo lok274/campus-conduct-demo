@@ -1557,7 +1557,7 @@ function CasePanel({ entry, student, onClose, onEdit, onSavePlan, onStart, onAdd
       <div className="panel-body case-body">
         <div className="case-person"><Avatar student={student} large/><div><h3>{student.name}</h3><p>{student.className} · 座號 {student.seat} · 學號 {student.number}</p></div><StatusTag status={entry.status}/></div>
         <div className="case-steps" aria-label="個案流程">
-          {canEditRecord ? <button type="button" className="active" onClick={returnToRecord} title="編輯事項資料" aria-label="1 建立紀錄：編輯事項資料">1 建立紀錄<FilePenLine size={14}/></button> : <span className="active" title="已結案個案不可修改事項資料">1 建立紀錄</span>}<span className={followUpSkipped ? "skipped" : entry.status !== "待跟進" ? "active" : ""} aria-current={entry.status === "跟進中" ? "step" : undefined}>{followUpSkipped ? "2 不需跟進" : "2 跟進處理"}</span><span className={isClosed ? "active" : ""} aria-current={isClosed ? "step" : undefined}>3 結案</span>
+          <span className="active" aria-disabled="true" title="建立紀錄步驟已完成，不能返回">1 建立紀錄</span><span className={followUpSkipped ? "skipped" : entry.status !== "待跟進" ? "active" : ""} aria-current={entry.status === "跟進中" ? "step" : undefined}>{followUpSkipped ? "2 不需跟進" : "2 跟進處理"}</span><span className={isClosed ? "active" : ""} aria-current={isClosed ? "step" : undefined}>3 結案</span>
         </div>
         <p className="case-flow-hint">{canEditRecord ? "未結案個案只可修改事項資料；學生及個案狀態不可更改。" : "已結案個案不可修改事項資料，學生亦不可更換。"}</p>
         {!isClosed && <div className="case-direct-close">
