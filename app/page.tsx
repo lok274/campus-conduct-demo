@@ -5,7 +5,7 @@ import { ArrowRight, ArrowUpDown, BookOpenCheck, CalendarDays, Check, CheckCircl
 import { SCHOOL_BASE_SCORES, SCHOOL_CATEGORIES, type SchoolCategory } from "../lib/school-rules";
 import { CONDUCT_RULES, resolveRule, resolveRuleSelection, ruleRecordFields, type RuleInput } from "../lib/conduct-rules";
 import { RuleDetails, RulePicker, type RulePickerErrors } from "../components/rule-picker";
-import { completeCase, DIRECT_CLOSURE_REASON } from "../lib/case-workflow";
+import { canEditOriginalRecord, completeCase, DIRECT_CLOSURE_REASON } from "../lib/case-workflow";
 import type { Student, Entry, FollowUp, Kind, Status } from "../lib/conduct-types";
 import { compareRecordUpdatedDesc, duplicateStudentIds, matchesStudent, normalizeSearch, recordDateRangeError, recordSearchText, scoreLabel, studentSearchRank, toggleSelection } from "../lib/list-tools";
 import { ListPagination, useListPage, type ListPage } from "../components/list-pagination";
@@ -701,10 +701,14 @@ function Workspace({ students, initialEntries, largeFixture }: { students: Stude
     setNotice(`已復原 ${undoBatch.count} 筆訓育紀錄`); setUndoBatch(null);
   }
   function editEntry(entry: Entry) {
+    if (!canEditOriginalRecord(entry.status)) {
+      setNotice("個案開始跟進或結案後，原始紀錄及所屬學生不可更改");
+      return;
+    }
     setEditingId(entry.id);
     const returnToCase = caseId === entry.id;
     setFormReturnCaseId(returnToCase ? entry.id : null);
-    setDraft({ studentId: entry.studentId, date: entry.date, note: entry.note, status: entry.status, needsFollowUp: entry.status !== "已結案", code: entry.rule?.code ?? "", schoolCategory: entry.rule?.category ?? "", subCategory: entry.rule?.subCategory ?? "", scoreChange: entry.scoreChange ?? entry.rule?.score });
+    setDraft({ studentId: entry.studentId, date: entry.date, note: entry.note, status: entry.status, needsFollowUp: true, code: entry.rule?.code ?? "", schoolCategory: entry.rule?.category ?? "", subCategory: entry.rule?.subCategory ?? "", scoreChange: entry.scoreChange ?? entry.rule?.score });
     setEntryErrors({});
     setStudentId(null); setCaseId(null); if (!returnToCase) setCaseReturnStudentId(null); setFormOpen(true);
   }
@@ -716,7 +720,9 @@ function Workspace({ students, initialEntries, largeFixture }: { students: Stude
   function saveEntry(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const errors: EntryFieldErrors = { ...validateRuleFields(draft) };
-    if (!editingId) errors.form = "這筆紀錄已不存在。請關閉表單並返回紀錄清單重新開啟。";
+    const editingEntry = editingId ? entries.find((entry) => entry.id === editingId) : undefined;
+    if (!editingEntry) errors.form = "這筆紀錄已不存在。請關閉表單並返回紀錄清單重新開啟。";
+    else if (!canEditOriginalRecord(editingEntry.status)) errors.form = "這個個案已開始跟進或已結案，原始紀錄及所屬學生不可更改。";
     if (!studentMap.has(draft.studentId)) errors.student = "尚未選擇有效學生。請搜尋並點選學生姓名，再核對班別、座號及學號。";
     const { rule, scoreChange, error } = resolveRuleSelection(draft);
     const dateError = validateRecordDate(draft.date, "日期", today);
@@ -731,11 +737,11 @@ function Workspace({ students, initialEntries, largeFixture }: { students: Stude
     const now = new Date();
     setBulkUpdateUndo(null);
     setEntries((current) => current.map((e) => {
-      if (e.id !== editingId) return e;
+      if (e.id !== editingId || !canEditOriginalRecord(e.status)) return e;
       const corrected = { ...e, ...savedDraft, status: e.status };
       const detailsChanged = e.studentId !== corrected.studentId || e.date !== corrected.date || e.note !== corrected.note ||
         e.kind !== corrected.kind || e.category !== corrected.category || e.scoreChange !== corrected.scoreChange || !sameRule(e.rule, corrected.rule);
-      const willClose = !draft.needsFollowUp && e.status !== "已結案";
+      const willClose = !draft.needsFollowUp;
       if (!detailsChanged && !willClose) return e;
       const touched = { ...corrected, updatedAt: now.toISOString() };
       return draft.needsFollowUp ? touched : completeCase(touched, DIRECT_CLOSURE_REASON, now, true);
@@ -1499,6 +1505,7 @@ function CasePanel({ entry, student, onClose, onEdit, onSavePlan, onStart, onAdd
   const [directCloseOpen, setDirectCloseOpen] = useState(false);
   const [directCloseReason, setDirectCloseReason] = useState("");
   const isClosed = entry.status === "已結案";
+  const canEditRecord = canEditOriginalRecord(entry.status);
   const followUps = entry.followUps ?? [];
   const followUpSkipped = isClosed && entry.closedWithoutFollowUp && !followUps.length;
   const hasUnsavedFollowUp = assignee !== (entry.assignee ?? "") || dueDate !== (entry.dueDate ?? "") || !!followUpNote.trim() || !!resolution.trim();
@@ -1524,6 +1531,7 @@ function CasePanel({ entry, student, onClose, onEdit, onSavePlan, onStart, onAdd
   }, [requestClose]);
 
   function returnToRecord() {
+    if (!canEditRecord) return;
     if (!confirmDiscardUnsaved("返回更正")) return;
     onEdit();
   }
@@ -1555,9 +1563,9 @@ function CasePanel({ entry, student, onClose, onEdit, onSavePlan, onStart, onAdd
       <div className="panel-body case-body">
         <div className="case-person"><Avatar student={student} large/><div><h3>{student.name}</h3><p>{student.className} · 座號 {student.seat} · 學號 {student.number}</p></div><StatusTag status={entry.status}/></div>
         <div className="case-steps" aria-label="個案流程">
-          <button type="button" className="active" onClick={returnToRecord} title="返回建立紀錄，更正資料" aria-label="1 建立紀錄：返回更正">1 建立紀錄<FilePenLine size={14}/></button><span className={followUpSkipped ? "skipped" : entry.status !== "待跟進" ? "active" : ""} aria-current={entry.status === "跟進中" ? "step" : undefined}>{followUpSkipped ? "2 不需跟進" : "2 跟進處理"}</span><span className={isClosed ? "active" : ""} aria-current={isClosed ? "step" : undefined}>3 結案</span>
+          {canEditRecord ? <button type="button" className="active" onClick={returnToRecord} title="返回建立紀錄，更正資料" aria-label="1 建立紀錄：返回更正">1 建立紀錄<FilePenLine size={14}/></button> : <span className="active" title="個案開始跟進或結案後不可更改原始紀錄">1 建立紀錄</span>}<span className={followUpSkipped ? "skipped" : entry.status !== "待跟進" ? "active" : ""} aria-current={entry.status === "跟進中" ? "step" : undefined}>{followUpSkipped ? "2 不需跟進" : "2 跟進處理"}</span><span className={isClosed ? "active" : ""} aria-current={isClosed ? "step" : undefined}>3 結案</span>
         </div>
-        <p className="case-flow-hint">按「1 建立紀錄」可返回更正，已儲存的跟進記錄會保留。</p>
+        <p className="case-flow-hint">{canEditRecord ? "按「1 建立紀錄」可返回更正。開始跟進後，原始紀錄及所屬學生將會鎖定。" : "此個案已開始跟進或結案，原始紀錄及所屬學生已鎖定。"}</p>
         {!isClosed && <div className="case-direct-close">
           {!directCloseOpen ? <button type="button" className="btn secondary" onClick={() => setDirectCloseOpen(true)}><CheckCircle2 size={16}/>不需跟進，直接完結</button> : <form onSubmit={submitDirectClosure}>
             <strong>確認直接完結此個案？</strong>
@@ -1566,7 +1574,7 @@ function CasePanel({ entry, student, onClose, onEdit, onSavePlan, onStart, onAdd
             <div className="case-direct-actions"><button type="button" className="btn secondary" onClick={() => setDirectCloseOpen(false)}>繼續跟進</button><button type="submit" className="btn primary"><Check size={16}/>確認直接完結</button></div>
           </form>}
         </div>}
-        <section className="case-section"><div className="case-section-head"><h3>事項資料</h3><button type="button" className="row-button" onClick={returnToRecord}><FilePenLine size={14}/>編輯紀錄</button></div>
+        <section className="case-section"><div className="case-section-head"><h3>事項資料</h3>{canEditRecord && <button type="button" className="row-button" onClick={returnToRecord}><FilePenLine size={14}/>編輯紀錄</button>}</div>
           <div className="case-facts"><div><span>紀錄日期</span><strong>{dateLabel(entry.date)}</strong></div><div><span>校本範疇</span><KindTag kind={entry.kind}/></div><div><span>校本事項</span><strong>{entry.category}</strong></div></div>
           {entry.rule && <RuleDetails rule={entry.rule} scoreChange={entry.scoreChange}/>}
           <p className="case-description">{entry.note}</p>

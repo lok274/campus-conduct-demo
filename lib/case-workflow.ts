@@ -11,6 +11,10 @@ type WorkflowRecord = {
 
 export const DIRECT_CLOSURE_REASON = "毋須進一步跟進，直接完結。";
 
+export function canEditOriginalRecord(status: CaseStatus) {
+  return status === "待跟進";
+}
+
 export function completeCase<T extends WorkflowRecord>(record: T, summary: string, now: Date, direct = false): T {
   const trimmed = summary.trim();
   if (record.status === "已結案" || !trimmed) return record;
