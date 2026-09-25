@@ -86,8 +86,8 @@ test("direct closure keeps existing history; editing closed records does not add
   assert.equal(closed.followUps.length,1); assert.equal(closed.closureHistory.length,2);
   assert.equal(completeCase(closed,"更正",new Date()),closed);
 });
-test("only cases in progress allow item detail edits", () => {
-  assert.equal(canEditCaseDetails("待跟進"), false);
+test("open cases allow item detail edits while closed cases stay locked", () => {
+  assert.equal(canEditCaseDetails("待跟進"), true);
   assert.equal(canEditCaseDetails("跟進中"), true);
   assert.equal(canEditCaseDetails("已結案"), false);
 });

@@ -703,7 +703,7 @@ function Workspace({ students, initialEntries, largeFixture }: { students: Stude
   }
   function editEntry(entry: Entry) {
     if (!canEditCaseDetails(entry.status)) {
-      setNotice("只有跟進中的個案可以修改事項資料");
+      setNotice("已結案個案不可修改事項資料");
       return;
     }
     setEditingId(entry.id);
@@ -722,8 +722,8 @@ function Workspace({ students, initialEntries, largeFixture }: { students: Stude
     event.preventDefault();
     const errors: EntryFieldErrors = { ...validateRuleFields(draft) };
     if (!editingEntry) errors.form = "這筆紀錄已不存在。請關閉表單並返回紀錄清單重新開啟。";
-    else if (!canEditCaseDetails(editingEntry.status)) errors.form = "只有跟進中的個案可以修改事項資料。";
-    if (editingEntry && draft.studentId !== editingEntry.studentId) errors.student = "跟進中的個案不能更換學生，只可修改事項資料。";
+    else if (!canEditCaseDetails(editingEntry.status)) errors.form = "已結案個案不可修改事項資料。";
+    if (editingEntry && draft.studentId !== editingEntry.studentId) errors.student = "未結案個案不能更換學生，只可修改事項資料。";
     else if (!studentMap.has(draft.studentId)) errors.student = "這筆紀錄的學生資料無效，請關閉表單並重新開啟個案。";
     const { rule, scoreChange, error } = resolveRuleSelection(draft);
     const dateError = validateRecordDate(draft.date, "日期", today);
@@ -1557,9 +1557,9 @@ function CasePanel({ entry, student, onClose, onEdit, onSavePlan, onStart, onAdd
       <div className="panel-body case-body">
         <div className="case-person"><Avatar student={student} large/><div><h3>{student.name}</h3><p>{student.className} · 座號 {student.seat} · 學號 {student.number}</p></div><StatusTag status={entry.status}/></div>
         <div className="case-steps" aria-label="個案流程">
-          {canEditRecord ? <button type="button" className="active" onClick={returnToRecord} title="編輯事項資料" aria-label="1 建立紀錄：編輯事項資料">1 建立紀錄<FilePenLine size={14}/></button> : <span className="active" title="只有跟進中的個案可修改事項資料">1 建立紀錄</span>}<span className={followUpSkipped ? "skipped" : entry.status !== "待跟進" ? "active" : ""} aria-current={entry.status === "跟進中" ? "step" : undefined}>{followUpSkipped ? "2 不需跟進" : "2 跟進處理"}</span><span className={isClosed ? "active" : ""} aria-current={isClosed ? "step" : undefined}>3 結案</span>
+          {canEditRecord ? <button type="button" className="active" onClick={returnToRecord} title="編輯事項資料" aria-label="1 建立紀錄：編輯事項資料">1 建立紀錄<FilePenLine size={14}/></button> : <span className="active" title="已結案個案不可修改事項資料">1 建立紀錄</span>}<span className={followUpSkipped ? "skipped" : entry.status !== "待跟進" ? "active" : ""} aria-current={entry.status === "跟進中" ? "step" : undefined}>{followUpSkipped ? "2 不需跟進" : "2 跟進處理"}</span><span className={isClosed ? "active" : ""} aria-current={isClosed ? "step" : undefined}>3 結案</span>
         </div>
-        <p className="case-flow-hint">{canEditRecord ? "跟進中的個案只可修改事項資料；學生及個案狀態不可更改。" : "只有跟進中的個案可修改事項資料；學生不可更換。"}</p>
+        <p className="case-flow-hint">{canEditRecord ? "未結案個案只可修改事項資料；學生及個案狀態不可更改。" : "已結案個案不可修改事項資料，學生亦不可更換。"}</p>
         {!isClosed && <div className="case-direct-close">
           {!directCloseOpen ? <button type="button" className="btn secondary" onClick={() => setDirectCloseOpen(true)}><CheckCircle2 size={16}/>不需跟進，直接完結</button> : <form onSubmit={submitDirectClosure}>
             <strong>確認直接完結此個案？</strong>
