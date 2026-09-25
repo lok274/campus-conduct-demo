@@ -125,6 +125,8 @@ const addDays = (date: string, amount: number) => {
   return value.toLocaleDateString("sv-SE");
 };
 const daysBetween = (from: string, to: string) => Math.max(1, Math.round((new Date(to + "T00:00:00").getTime() - new Date(from + "T00:00:00").getTime()) / 86400000));
+const DUE_REMINDER_DAYS = 3;
+const isWithinDueReminder = (dueDate: string, today: string) => dueDate >= today && dueDate <= addDays(today, DUE_REMINDER_DAYS);
 function validateRuleFields(value: RuleInput): RulePickerErrors {
   if (!value.code.trim()) return { code: "尚未選擇 Code，因此系統無法判斷事項及分數。請從下拉選單選擇，或直接輸入 Code。" };
   const resolved = resolveRule(value);
@@ -152,7 +154,7 @@ function followUpDueMeta(entry: Entry, today: string) {
   if (!entry.dueDate) return { tone: "unscheduled", label: "未設定期限", date: "請安排跟進日期" };
   if (entry.dueDate < today) return { tone: "overdue", label: `已逾期 ${daysBetween(entry.dueDate, today)} 日`, date: dateLabel(entry.dueDate) };
   if (entry.dueDate === today) return { tone: "today", label: "今天到期", date: dateLabel(entry.dueDate) };
-  return { tone: "upcoming", label: `距離到期 ${daysBetween(today, entry.dueDate)} 日`, date: dateLabel(entry.dueDate) };
+  return { tone: isWithinDueReminder(entry.dueDate, today) ? "upcoming" : "scheduled", label: `距離到期 ${daysBetween(today, entry.dueDate)} 日`, date: dateLabel(entry.dueDate) };
 }
 function caseNextStep(entry: Entry, today: string) {
   if (entry.status === "已結案") return "個案已結案，毋須跟進";
@@ -1390,10 +1392,10 @@ function FollowUpCalendar({ entries, studentMap, today, onOpenCase }: {
         const count = scopedEntries.filter((entry) => entry.dueDate === date).length;
         const isToday = date === today;
         const isOverdue = date < today;
-        const alertTone = count ? (isOverdue ? "overdue" : "upcoming") : "";
+        const alertTone = count ? (isOverdue ? "overdue" : isWithinDueReminder(date, today) ? "upcoming" : "") : "";
         return <button key={date} type="button" className={`${activeDate === date ? "selected " : ""}${isToday ? "today " : ""}${alertTone}`} aria-pressed={activeDate === date} onClick={() => setSelectedDate(date)}>
           <time dateTime={date}><span>{calendarWeekdayFormatter.format(calendarDisplayDate(date))}</span><strong>{calendarDayFormatter.format(calendarDisplayDate(date))}</strong></time>
-          <small>{count ? (isToday ? "今天到期" : isOverdue ? "已逾期" : "到期前") : "沒有到期個案"}</small>
+          <small>{count ? (isToday ? "今天到期" : isOverdue ? "已逾期" : isWithinDueReminder(date, today) ? "3 天內到期" : "尚未進入提醒期") : "沒有到期個案"}</small>
           <b>{count} 項</b>
         </button>;
       })}
