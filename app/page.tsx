@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type FormEvent, type KeyboardEvent as ReactKeyboardEvent, type RefObject } from "react";
-import { ArrowRight, ArrowUpDown, BookOpenCheck, CalendarDays, Check, CheckCircle2, ChevronDown, ChevronRight, ClipboardList, Clock3, Download, FilePenLine, Filter, LayoutDashboard, Menu, Plus, RotateCcw, Search, ShieldCheck, SlidersHorizontal, Sparkles, Trash2, Upload, UsersRound, X } from "lucide-react";
+import { ArrowRight, ArrowUpDown, BookOpenCheck, CalendarDays, Check, CheckCircle2, ChevronDown, ChevronRight, ClipboardList, Clock3, Download, FilePenLine, Filter, LayoutDashboard, Menu, Plus, Printer, RotateCcw, Search, ShieldCheck, SlidersHorizontal, Sparkles, Trash2, Upload, UsersRound, X } from "lucide-react";
 import { SCHOOL_BASE_SCORES, SCHOOL_CATEGORIES, type SchoolCategory } from "../lib/school-rules";
 import { CONDUCT_RULES, resolveRule, resolveRuleSelection, ruleRecordFields, type RuleInput } from "../lib/conduct-rules";
 import { RuleDetails, RulePicker, type RulePickerErrors } from "../components/rule-picker";
@@ -206,6 +206,12 @@ function ValidationNotice({ message, id }: { message: string; id?: string }) {
 function FieldError({ message, id }: { message?: string; id: string }) {
   if (!message) return null;
   return <span id={id} className="field-error" role="alert">{message}</span>;
+}
+function printView(target: "student" | "case" | "records") {
+  document.body.dataset.printTarget = target;
+  const cleanup = () => { delete document.body.dataset.printTarget; };
+  window.addEventListener("afterprint", cleanup, { once: true });
+  window.requestAnimationFrame(() => window.print());
 }
 
 export default function Home() {
@@ -565,6 +571,15 @@ function Workspace({ students, initialEntries, largeFixture }: { students: Stude
     setNotice(`已復原 ${bulkUpdateUndo.count} 筆批次變更`);
     setBulkUpdateUndo(null);
   }
+  function printRecords() {
+    if (recordDateError) {
+      setRecordFiltersOpen(true);
+      setRecordTransferMessage({ tone: "error", text: `無法列印篩選結果：${recordDateError} 請先修正進階篩選的紀錄日期。` });
+      window.setTimeout(() => document.getElementById(recordDateError.includes("結束日期") && !recordDateError.includes("開始日期") ? "record-date-to" : "record-date-from")?.focus({ preventScroll: false }), 0);
+      return;
+    }
+    printView("records");
+  }
   function exportRecords() {
     if (recordDateError) {
       setRecordFiltersOpen(true);
@@ -888,6 +903,7 @@ function Workspace({ students, initialEntries, largeFixture }: { students: Stude
           {page === "records" && <div className="page-actions record-transfer-actions">
             <input ref={recordImportInputRef} className="sr-only" type="file" accept=".csv,text/csv,.json,application/json" aria-label="選擇獎懲紀錄 CSV 或 JSON 備份檔案" onChange={importRecords}/>
             <button type="button" className="btn secondary" onClick={exportRecords}><Download size={17}/>按目前篩選匯出 CSV</button>
+            <button type="button" className="btn secondary" onClick={printRecords}><Printer size={17}/>列印篩選結果</button>
             <button type="button" className="btn secondary" onClick={() => recordImportInputRef.current?.click()}><Upload size={17}/>匯入紀錄</button>
           </div>}
         </div>
@@ -896,6 +912,7 @@ function Workspace({ students, initialEntries, largeFixture }: { students: Stude
         {page === "records" && bulkUpdateUndo && <div className="bulk-undo-banner" role="status"><span><CheckCircle2 size={17}/><strong>已批次更新 {bulkUpdateUndo.count} 筆紀錄</strong><small>進行其他紀錄修改前，可復原最近一次批次變更。</small></span><button type="button" className="btn secondary" onClick={undoBulkRecordUpdate}><RotateCcw size={15}/>復原批次變更</button></div>}
         {page === "records" && <RecordsDirectory
           entries={recordPage.items}
+          printEntries={shownEntries}
           pagination={recordPage}
           totalCount={entries.length}
           studentMap={studentMap}
@@ -938,7 +955,7 @@ function Workspace({ students, initialEntries, largeFixture }: { students: Stude
         <footer>校園訓育系統 · 前端介面示範 <span>所有學生及紀錄均為虛構資料</span></footer>
       </main>
     </div>
-    {selected && <div className="overlay" onMouseDown={(e) => { if (e.target === e.currentTarget) setStudentId(null); }}><section className="panel" role="dialog" aria-modal="true" aria-labelledby="student-title"><div className="panel-head"><div><small>STUDENT PROFILE</small><h2 id="student-title">學生資料</h2></div><button type="button" aria-label="關閉學生資料" onClick={() => setStudentId(null)}><X size={20}/></button></div><div className="panel-body"><div className="profile"><Avatar student={selected} large/><div><h3>{selected.name}</h3><p>{selected.className} · 座號 {selected.seat}</p></div></div><div className="profile-facts"><div><span>學號</span><strong>{selected.number}</strong></div><div><span>班級</span><strong>{selected.className}</strong></div><div><span>紀錄總數</span><strong>{selectedEntries.length} 筆</strong></div></div><StudentOverview entries={selectedEntries} today={today} onOpenCase={openCase}/><h3 className="block-title">個人紀錄時間線 <span>{selectedTimeline.length} 項事件</span></h3><p className="timeline-intro">按日期查看紀錄、跟進與結案；紀錄總數指個案數目。</p><StudentTimeline events={selectedTimeline} onOpenCase={openCase}/></div></section></div>}
+    {selected && <div className="overlay" onMouseDown={(e) => { if (e.target === e.currentTarget) setStudentId(null); }}><section className="panel print-root print-student" role="dialog" aria-modal="true" aria-labelledby="student-title"><div className="panel-head"><div><small>STUDENT PROFILE</small><h2 id="student-title">學生資料</h2></div><div className="panel-head-actions print-hide"><button type="button" className="panel-print-button" onClick={() => printView("student")}><Printer size={16}/>列印學生摘要</button><button type="button" aria-label="關閉學生資料" onClick={() => setStudentId(null)}><X size={20}/></button></div></div><div className="panel-body"><div className="profile"><Avatar student={selected} large/><div><h3>{selected.name}</h3><p>{selected.className} · 座號 {selected.seat}</p></div></div><div className="profile-facts"><div><span>學號</span><strong>{selected.number}</strong></div><div><span>班級</span><strong>{selected.className}</strong></div><div><span>紀錄總數</span><strong>{selectedEntries.length} 筆</strong></div></div><StudentOverview entries={selectedEntries} today={today} onOpenCase={openCase}/><h3 className="block-title">個人紀錄時間線 <span>{selectedTimeline.length} 項事件</span></h3><p className="timeline-intro">按日期查看紀錄、跟進與結案；紀錄總數指個案數目。</p><StudentTimeline events={selectedTimeline} onOpenCase={openCase}/></div></section></div>}
     {formOpen && <div className="overlay" onMouseDown={(e) => { if (e.target === e.currentTarget) closeEntryForm(); }}>
       <section className="panel" role="dialog" aria-modal="true" aria-labelledby="form-title">
         <div className="panel-head"><div><small>CONDUCT RECORD</small><h2 id="form-title">編輯事項資料</h2></div><button type="button" aria-label="關閉表單" onClick={closeEntryForm}><X size={20}/></button></div>
@@ -1413,8 +1430,9 @@ function FollowUpCalendar({ entries, studentMap, today, onOpenCase }: {
   </section>;
 }
 
-function RecordsDirectory({ entries, totalCount, pagination, studentMap, search, classFilter, kindFilter, categoryFilter, statusFilter, assigneeFilter, dateFrom, dateTo, dateRangeError, sort, filtersOpen, activeFilters, classes, categories: recordCategories, assignees, selectedIds, bulkUpdateBlockedCount, allVisibleSelected, onSearch, onClassFilterChange, onKindFilterChange, onCategoryFilterChange, onStatusFilterChange, onAssigneeFilterChange, onDateFromChange, onDateToChange, onSortChange, onFiltersOpenChange, onReset, onOpenCase, onToggleSelection, onToggleVisible, onClearSelection, onBulkUpdate, onDelete }: {
+function RecordsDirectory({ entries, printEntries, totalCount, pagination, studentMap, search, classFilter, kindFilter, categoryFilter, statusFilter, assigneeFilter, dateFrom, dateTo, dateRangeError, sort, filtersOpen, activeFilters, classes, categories: recordCategories, assignees, selectedIds, bulkUpdateBlockedCount, allVisibleSelected, onSearch, onClassFilterChange, onKindFilterChange, onCategoryFilterChange, onStatusFilterChange, onAssigneeFilterChange, onDateFromChange, onDateToChange, onSortChange, onFiltersOpenChange, onReset, onOpenCase, onToggleSelection, onToggleVisible, onClearSelection, onBulkUpdate, onDelete }: {
   entries: Entry[];
+  printEntries: Entry[];
   pagination: ListPage;
   totalCount: number;
   studentMap: Map<string, Student>;
@@ -1455,7 +1473,8 @@ function RecordsDirectory({ entries, totalCount, pagination, studentMap, search,
   onDelete: () => void;
 }) {
   const advancedCount = Number(categoryFilter !== "全部事項") + Number(assigneeFilter !== ALL_ASSIGNEES) + Number(Boolean(dateFrom)) + Number(Boolean(dateTo));
-  return <section className="card table-card">
+  return <section className="card table-card print-root print-records">
+    <div className="print-only print-document-head"><small>校園訓育系統</small><h1>獎懲紀錄篩選結果</h1><p>{activeFilters.length ? `篩選條件：${activeFilters.join("、")}` : "篩選條件：全部紀錄"} · 共 {printEntries.length.toLocaleString()} 筆</p></div>
     <div className="table-heading">
       <div><small>CONDUCT RECORDS</small><h2>符合條件的紀錄 <b>{pagination.total}</b></h2></div>
       <div className="filters list-toolbar">
@@ -1487,6 +1506,10 @@ function RecordsDirectory({ entries, totalCount, pagination, studentMap, search,
       const openRecord = () => onOpenCase(entry.id);
       return <tr key={entry.id} className={`record-row${selected ? " selected" : ""}`} tabIndex={0} aria-label={`查看 ${student.name} 的 ${entry.category} 紀錄詳情`} onClick={openRecord} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); openRecord(); } }}><td className="record-select-col" onClick={(event) => event.stopPropagation()} onKeyDown={(event) => event.stopPropagation()}><input type="checkbox" aria-label={`選取 ${student.name} 的 ${entry.category} 紀錄`} checked={selected} onChange={() => onToggleSelection(entry.id)}/></td><td><div className="person"><Avatar student={student}/><div><strong>{student.name} <span>· {student.className}</span></strong></div></div></td><td className="record-item"><strong>{entry.category}</strong></td><td data-label="本次加減分"><strong className="actual-score">{scoreLabel(entry)}</strong></td><td data-label="狀態"><StatusTag status={entry.status}/></td></tr>;
     })}</tbody></table>{!entries.length && <Empty text="沒有符合條件的紀錄" hint="可清除條件後重新查看全部紀錄。" onReset={activeFilters.length ? onReset : undefined}/>}</div>
+    <div className="print-only print-records-content"><table className="records-table print-records-table"><thead><tr><th>學生</th><th>事項</th><th>實際加減分</th><th>狀態</th></tr></thead><tbody>{printEntries.map((entry) => {
+      const student = studentMap.get(entry.studentId)!;
+      return <tr key={entry.id}><td><div className="person"><Avatar student={student}/><div><strong>{student.name} <span>· {student.className}</span></strong></div></div></td><td className="record-item"><strong>{entry.category}</strong></td><td><strong className="actual-score">{scoreLabel(entry)}</strong></td><td><StatusTag status={entry.status}/></td></tr>;
+    })}</tbody></table>{!printEntries.length && <p className="print-empty">沒有符合條件的紀錄。</p>}</div>
     <ListPagination page={pagination} label="獎懲紀錄"/>
     <div className="list-total-note">全部 {totalCount.toLocaleString()} 筆紀錄 · 每筆均使用校本 Code 及實際加減分</div>
   </section>;
@@ -1618,8 +1641,8 @@ function CasePanel({ entry, student, today, onClose, onEdit, onSavePlan, onStart
   }
 
   return <div className="overlay" onMouseDown={(event) => { if (event.target === event.currentTarget) requestClose(); }}>
-    <section className="panel case-panel" role="dialog" aria-modal="true" aria-labelledby="case-title">
-      <div className="panel-head"><div><small>CASE DETAILS / 個案跟進</small><h2 id="case-title">個案詳情</h2></div><button type="button" aria-label="關閉個案詳情" onClick={requestClose}><X size={20}/></button></div>
+    <section className="panel case-panel print-root print-case" role="dialog" aria-modal="true" aria-labelledby="case-title">
+      <div className="panel-head"><div><small>CASE DETAILS / 個案跟進</small><h2 id="case-title">個案詳情</h2></div><div className="panel-head-actions print-hide"><button type="button" className="panel-print-button" onClick={() => printView("case")}><Printer size={16}/>列印個案詳情</button><button type="button" aria-label="關閉個案詳情" onClick={requestClose}><X size={20}/></button></div></div>
       <div className="panel-body case-body">
         <div className="case-person"><Avatar student={student} large/><div><h3>{student.name}</h3><p>{student.className} · 座號 {student.seat} · 學號 {student.number}</p></div><StatusTag status={entry.status}/></div>
         <section className="case-summary" aria-labelledby="case-summary-title">
@@ -1634,8 +1657,8 @@ function CasePanel({ entry, student, today, onClose, onEdit, onSavePlan, onStart
         <div className="case-steps" aria-label="個案流程">
           <span className="active" aria-disabled="true" title="建立紀錄步驟已完成，不能返回">1 建立紀錄</span><span className={followUpSkipped ? "skipped" : entry.status !== "待跟進" ? "active" : ""} aria-current={entry.status === "跟進中" ? "step" : undefined}>{followUpSkipped ? "2 不需跟進" : "2 跟進處理"}</span><span className={isClosed ? "active" : ""} aria-current={isClosed ? "step" : undefined}>3 結案</span>
         </div>
-        <p className="case-flow-hint">{canEditRecord ? "未結案個案只可修改事項資料；學生及個案狀態不可更改。" : "已結案個案不可修改事項資料，學生亦不可更換。"}</p>
-        {!isClosed && <div className="case-direct-close">
+        <p className="case-flow-hint print-hide">{canEditRecord ? "未結案個案只可修改事項資料；學生及個案狀態不可更改。" : "已結案個案不可修改事項資料，學生亦不可更換。"}</p>
+        {!isClosed && <div className="case-direct-close print-hide">
           {!directCloseOpen ? <button type="button" className="btn secondary" onClick={() => setDirectCloseOpen(true)}><CheckCircle2 size={16}/>不需跟進，直接完結</button> : <form onSubmit={submitDirectClosure}>
             <strong>確認直接完結此個案？</strong>
             <p>將標記為已結案，不再列為未結案事項；已儲存的跟進記錄及安排會保留。</p>
@@ -1649,20 +1672,20 @@ function CasePanel({ entry, student, today, onClose, onEdit, onSavePlan, onStart
           <p className="case-description">{entry.note}</p>
         </section>
         <section className="case-section"><div className="case-section-head"><h3>跟進安排</h3></div>
-          {isClosed ? <div className="case-facts"><div><span>負責人</span><strong>{entry.assignee || "未指定"}</strong></div><div><span>跟進期限</span><strong>{entry.dueDate ? dateLabel(entry.dueDate) : "未設定"}</strong></div></div> : <form className="case-plan" onSubmit={(event) => { event.preventDefault(); onSavePlan(entry.id, assignee, dueDate); }}>
+          {isClosed ? <div className="case-facts"><div><span>負責人</span><strong>{entry.assignee || "未指定"}</strong></div><div><span>跟進期限</span><strong>{entry.dueDate ? dateLabel(entry.dueDate) : "未設定"}</strong></div></div> : <><div className="print-only case-facts"><div><span>負責人</span><strong>{entry.assignee || "未指定"}</strong></div><div><span>跟進期限</span><strong>{entry.dueDate ? dateLabel(entry.dueDate) : "未設定"}</strong></div></div><form className="case-plan print-hide" onSubmit={(event) => { event.preventDefault(); onSavePlan(entry.id, assignee, dueDate); }}>
             <div className="field-row"><label className="field"><span>負責人</span><input value={assignee} onChange={(event) => setAssignee(event.target.value)} placeholder="例如：班主任" maxLength={60}/></label><label className="field"><span>跟進期限</span><input type="date" value={dueDate} onChange={(event) => setDueDate(event.target.value)}/></label></div>
             <button type="submit" className="btn secondary">儲存安排</button>
-          </form>}
+          </form></>}
         </section>
         <section className="case-section"><div className="case-section-head"><h3>跟進記錄</h3><span>{followUps.length} 則</span></div>
           {followUps.length ? <ol className="case-timeline">{followUps.map((item) => <li key={item.id}><div><strong>{item.author}</strong><time dateTime={item.date}>{dateLabel(item.date)}</time></div><p>{item.note}</p></li>)}</ol> : <p className="case-empty">尚未加入跟進記錄。</p>}
-          {!isClosed && <form className="case-follow-form" onSubmit={submitFollowUp}><label className="field"><span>新增跟進記錄</span><textarea rows={3} maxLength={500} placeholder="記下聯絡、面談、觀察或下一步…" value={followUpNote} onChange={(event) => setFollowUpNote(event.target.value)} required/></label><button type="submit" className="btn secondary"><Plus size={15}/>加入記錄</button></form>}
+          {!isClosed && <form className="case-follow-form print-hide" onSubmit={submitFollowUp}><label className="field"><span>新增跟進記錄</span><textarea rows={3} maxLength={500} placeholder="記下聯絡、面談、觀察或下一步…" value={followUpNote} onChange={(event) => setFollowUpNote(event.target.value)} required/></label><button type="submit" className="btn secondary"><Plus size={15}/>加入記錄</button></form>}
         </section>
         <section className="case-section case-closing"><div className="case-section-head"><h3>結案處理</h3></div>
-          {isClosed ? <><p className="case-closed-date">結案日期：{entry.closedAt ? dateLabel(entry.closedAt) : "未有結案日期"}</p><p className="case-description">{entry.resolution || "這筆紀錄沒有結案摘要。"}</p><div className="case-closed-actions"><button type="button" className="btn secondary" onClick={() => onReopen(entry.id)}>重新開啟個案</button><button type="button" className="btn primary" onClick={requestClose}>確定</button></div></> : <form onSubmit={submitClosure}><label className="field"><span>處理結果及結案摘要 *</span><textarea rows={3} maxLength={500} placeholder="說明已採取的行動、結果，以及為何可以結案…" value={resolution} onChange={(event) => setResolution(event.target.value)} required/></label><button type="submit" className="btn primary"><Check size={16}/>完成結案</button></form>}
+          {isClosed ? <><p className="case-closed-date">結案日期：{entry.closedAt ? dateLabel(entry.closedAt) : "未有結案日期"}</p><p className="case-description">{entry.resolution || "這筆紀錄沒有結案摘要。"}</p><div className="case-closed-actions print-hide"><button type="button" className="btn secondary" onClick={() => onReopen(entry.id)}>重新開啟個案</button><button type="button" className="btn primary" onClick={requestClose}>確定</button></div></> : <><p className="print-only case-empty">個案尚未結案。</p><form className="print-hide" onSubmit={submitClosure}><label className="field"><span>處理結果及結案摘要 *</span><textarea rows={3} maxLength={500} placeholder="說明已採取的行動、結果，以及為何可以結案…" value={resolution} onChange={(event) => setResolution(event.target.value)} required/></label><button type="submit" className="btn primary"><Check size={16}/>完成結案</button></form></>}
         </section>
       </div>
-      {!isClosed && entry.status === "待跟進" && <div className="panel-foot"><button type="button" className="btn secondary" onClick={() => onStart(entry.id)}>開始跟進</button></div>}
+      {!isClosed && entry.status === "待跟進" && <div className="panel-foot print-hide"><button type="button" className="btn secondary" onClick={() => onStart(entry.id)}>開始跟進</button></div>}
     </section>
   </div>;
 }
