@@ -426,6 +426,7 @@ function Workspace({ students, initialEntries, largeFixture }: { students: Stude
   const recordPage = useListPage(shownEntries, JSON.stringify([recordSearch, recordClassFilter, recordKindFilter, recordCategoryFilter, recordStatusFilter, recordAssigneeFilter, recordDateFrom, recordDateTo, recordSort]));
   const recordSelectedIdSet = new Set(recordSelectedIds);
   const selectedRecordEntries = entries.filter((entry) => recordSelectedIdSet.has(entry.id));
+  const selectedClosedRecordCount = selectedRecordEntries.filter((entry) => entry.status === "已結案").length;
   const recordPageAllSelected = recordPage.items.length > 0 && recordPage.items.every((entry) => recordSelectedIdSet.has(entry.id));
   const bulkUpdateAffectedEntries = selectedRecordEntries.filter((entry) => bulkRecordWouldChange(entry, bulkUpdateDraft));
   const globalQuery = normalizeSearch(globalSearch);
@@ -487,6 +488,10 @@ function Workspace({ students, initialEntries, largeFixture }: { students: Stude
   }
   function openBulkUpdate() {
     if (!selectedRecordEntries.length) return;
+    if (selectedClosedRecordCount) {
+      setNotice("已結案個案不能批次更新，請先取消勾選已結案紀錄");
+      return;
+    }
     setBulkUpdateDraft(newBulkRecordUpdate());
     setBulkUpdateErrors({});
     setBulkUpdateStep("edit");
@@ -515,6 +520,7 @@ function Workspace({ students, initialEntries, largeFixture }: { students: Stude
     event.preventDefault();
     const errors: BulkFieldErrors = {};
     if (!selectedRecordEntries.length) errors.form = "找不到原先選取的紀錄。請關閉此視窗，返回紀錄清單重新選擇。";
+    else if (selectedClosedRecordCount) errors.form = "已結案個案不能批次更新。請關閉此視窗並取消勾選已結案紀錄。";
     else if (!hasBulkRecordUpdate(bulkUpdateDraft)) errors.options = "尚未選擇要更新的項目。請勾選「負責人」、「跟進期限」或「個案狀態」至少一項。";
     if (bulkUpdateDraft.dueDateEnabled && bulkUpdateDraft.dueDate && recordDateRangeError(bulkUpdateDraft.dueDate, bulkUpdateDraft.dueDate)) {
       errors.dueDate = "「跟進期限」無效：日期不存在或格式不完整。請重新選擇，或留空以清除原有期限。";
@@ -889,6 +895,7 @@ function Workspace({ students, initialEntries, largeFixture }: { students: Stude
           categories={recordCategories}
           assignees={assignees}
           selectedIds={recordSelectedIdSet}
+          bulkUpdateBlockedCount={selectedClosedRecordCount}
           allVisibleSelected={recordPageAllSelected}
           onSearch={setRecordSearch}
           onClassFilterChange={setRecordClassFilter}
@@ -1386,7 +1393,7 @@ function FollowUpCalendar({ entries, studentMap, today, onOpenCase }: {
   </section>;
 }
 
-function RecordsDirectory({ entries, totalCount, pagination, studentMap, search, classFilter, kindFilter, categoryFilter, statusFilter, assigneeFilter, dateFrom, dateTo, dateRangeError, sort, filtersOpen, activeFilters, classes, categories: recordCategories, assignees, selectedIds, allVisibleSelected, onSearch, onClassFilterChange, onKindFilterChange, onCategoryFilterChange, onStatusFilterChange, onAssigneeFilterChange, onDateFromChange, onDateToChange, onSortChange, onFiltersOpenChange, onReset, onOpenCase, onToggleSelection, onToggleVisible, onClearSelection, onBulkUpdate, onDelete }: {
+function RecordsDirectory({ entries, totalCount, pagination, studentMap, search, classFilter, kindFilter, categoryFilter, statusFilter, assigneeFilter, dateFrom, dateTo, dateRangeError, sort, filtersOpen, activeFilters, classes, categories: recordCategories, assignees, selectedIds, bulkUpdateBlockedCount, allVisibleSelected, onSearch, onClassFilterChange, onKindFilterChange, onCategoryFilterChange, onStatusFilterChange, onAssigneeFilterChange, onDateFromChange, onDateToChange, onSortChange, onFiltersOpenChange, onReset, onOpenCase, onToggleSelection, onToggleVisible, onClearSelection, onBulkUpdate, onDelete }: {
   entries: Entry[];
   pagination: ListPage;
   totalCount: number;
@@ -1407,6 +1414,7 @@ function RecordsDirectory({ entries, totalCount, pagination, studentMap, search,
   categories: string[];
   assignees: string[];
   selectedIds: ReadonlySet<string>;
+  bulkUpdateBlockedCount: number;
   allVisibleSelected: boolean;
   onSearch: (value: string) => void;
   onClassFilterChange: (value: string) => void;
@@ -1438,7 +1446,7 @@ function RecordsDirectory({ entries, totalCount, pagination, studentMap, search,
         <button type="button" className={"advanced-toggle" + (filtersOpen ? " active" : "")} aria-expanded={filtersOpen} aria-controls="record-advanced-filters" onClick={() => onFiltersOpenChange(!filtersOpen)}><SlidersHorizontal size={15}/>進階篩選{advancedCount > 0 && <b>{advancedCount}</b>}</button>
       </div>
       {selectedIds.size === 0 && <div className="record-delete-hint" role="note"><Trash2 size={19}/><span><strong>勾選紀錄後即可刪除</strong><small>先勾選清單左側的方格，「刪除紀錄」按鈕便會顯示。</small></span></div>}
-      {selectedIds.size > 0 && <div className="record-selection-toolbar" role="status"><span><strong>已選 {selectedIds.size.toLocaleString()} 筆紀錄</strong><small>可跨頁及篩選保留選取</small></span><div><button type="button" className="btn secondary" onClick={onClearSelection}>清除選取</button><button type="button" className="btn primary" onClick={onBulkUpdate}>批次更新</button><button type="button" className="btn danger" onClick={onDelete}><Trash2 size={15}/>刪除紀錄</button></div></div>}
+      {selectedIds.size > 0 && <div className="record-selection-toolbar" role="status"><span><strong>已選 {selectedIds.size.toLocaleString()} 筆紀錄</strong><small id="bulk-update-selection-note" className={bulkUpdateBlockedCount ? "blocked" : undefined}>{bulkUpdateBlockedCount ? `包含 ${bulkUpdateBlockedCount.toLocaleString()} 筆已結案紀錄；請取消勾選後再批次更新。` : "可跨頁及篩選保留選取"}</small></span><div><button type="button" className="btn secondary" onClick={onClearSelection}>清除選取</button><button type="button" className="btn primary" onClick={onBulkUpdate} disabled={bulkUpdateBlockedCount > 0} aria-describedby="bulk-update-selection-note">批次更新</button><button type="button" className="btn danger" onClick={onDelete}><Trash2 size={15}/>刪除紀錄</button></div></div>}
     </div>
     {filtersOpen && <div className="advanced-filter-panel" id="record-advanced-filters">
       <div className="advanced-filter-head"><div><strong>篩選訓育紀錄</strong><span>所有條件會同時套用</span></div><button type="button" onClick={onReset}><RotateCcw size={14}/>重設</button></div>

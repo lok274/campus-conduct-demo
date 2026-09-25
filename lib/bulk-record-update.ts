@@ -17,6 +17,7 @@ export function hasBulkRecordUpdate(update: BulkRecordUpdate) {
 }
 
 export function bulkRecordWouldChange(entry: Entry, update: BulkRecordUpdate) {
+  if (entry.status === "已結案") return false;
   const assignee = update.assignee.trim();
   return (update.assigneeEnabled && (entry.assignee ?? "") !== assignee) ||
     (update.dueDateEnabled && (entry.dueDate ?? "") !== update.dueDate) ||
@@ -26,24 +27,7 @@ export function bulkRecordWouldChange(entry: Entry, update: BulkRecordUpdate) {
 function applyStatus(entry: Entry, status: Status, now: Date): Entry {
   if (entry.status === status) return entry;
   if (status === "已結案") return completeCase(entry, BULK_CLOSURE_SUMMARY, now);
-  if (entry.status !== "已結案") return { ...entry, status };
-
-  const previousResolution = entry.resolution ?? "未提供";
-  return {
-    ...entry,
-    status,
-    resolution: undefined,
-    closedAt: undefined,
-    closedWithoutFollowUp: false,
-    followUps: [...(entry.followUps ?? []), {
-      id: `f${now.getTime()}-${entry.id}`,
-      date: now.toLocaleDateString("sv-SE"),
-      at: now.toISOString(),
-      type: "reopened",
-      author: "訓育組",
-      note: `批次操作重新開啟個案。前次結案摘要：${previousResolution}`,
-    }],
-  };
+  return { ...entry, status };
 }
 
 export function applyBulkRecordUpdate(entries: Entry[], selectedIds: ReadonlySet<string>, update: BulkRecordUpdate, now = new Date()) {

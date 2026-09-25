@@ -19,7 +19,7 @@ test("bulk update only changes selected records and restores exact snapshots", (
   assert.deepEqual(restoreBulkRecordUpdate(result.entries, result.before), entries);
 });
 
-test("bulk close appends closure history; reopening preserves that history", () => {
+test("bulk close appends closure history; closed records cannot be bulk updated", () => {
   const now = new Date("2026-09-24T08:00:00.000Z");
   const closed = applyBulkRecordUpdate(entries, new Set(["r1"]), { assigneeEnabled: false, assignee: "", dueDateEnabled: false, dueDate: "", statusEnabled: true, status: "已結案" }, now).entries[0];
   assert.equal(closed.status, "已結案");
@@ -27,12 +27,10 @@ test("bulk close appends closure history; reopening preserves that history", () 
   assert.equal(closed.closureHistory.length, 1);
   assert.equal(closed.updatedAt, now.toISOString());
 
-  const reopened = applyBulkRecordUpdate(entries, new Set(["r2"]), { assigneeEnabled: false, assignee: "", dueDateEnabled: false, dueDate: "", statusEnabled: true, status: "跟進中" }, now).entries[1];
-  assert.equal(reopened.status, "跟進中");
-  assert.equal(reopened.resolution, undefined);
-  assert.equal(reopened.closureHistory.length, 1);
-  assert.equal(reopened.followUps.at(-1).type, "reopened");
-  assert.equal(reopened.updatedAt, now.toISOString());
+  const closedResult = applyBulkRecordUpdate(entries, new Set(["r2"]), { assigneeEnabled: true, assignee: "新負責人", dueDateEnabled: true, dueDate: "2026-10-01", statusEnabled: true, status: "跟進中" }, now);
+  assert.equal(closedResult.changedCount, 0);
+  assert.equal(closedResult.entries[1], entries[1]);
+  assert.equal(bulkRecordWouldChange(entries[1], { assigneeEnabled: true, assignee: "新負責人", dueDateEnabled: false, dueDate: "", statusEnabled: false, status: "已結案" }), false);
 });
 
 test("preview ignores no-op fields and supports clearing owner or deadline", () => {
