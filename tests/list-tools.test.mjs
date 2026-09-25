@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { performance } from "node:perf_hooks";
 import { createLargeSchool } from "./fixtures/large-school.ts";
-import { compareRecordUpdatedDesc, matchesStudent, normalizeSearch, recordSearchText, pageWindow, toggleSelection, duplicateStudentIds, scoreLabel, studentSearchRank } from "../lib/list-tools.ts";
+import { compareRecordUpdatedDesc, matchesStudent, normalizeSearch, recordDateRangeError, recordSearchText, pageWindow, toggleSelection, duplicateStudentIds, scoreLabel, studentSearchRank } from "../lib/list-tools.ts";
 import { completeCase } from "../lib/case-workflow.ts";
 
 const { students, entries } = createLargeSchool();
@@ -70,6 +70,13 @@ test("last modified sort uses updatedAt rather than the record or activity date"
   const oldRecordEditedToday={id:"old",date:"2025-01-01",updatedAt:"2026-09-25T08:00:00.000Z"};
   const recentRecordNotEdited={id:"recent",date:"2026-09-24",updatedAt:"2026-09-24T08:00:00.000Z"};
   assert.deepEqual([recentRecordNotEdited,oldRecordEditedToday].sort(compareRecordUpdatedDesc).map(entry=>entry.id),["old","recent"]);
+});
+test("record export date range rejects invalid dates separately", () => {
+  assert.equal(recordDateRangeError("", ""), "");
+  assert.equal(recordDateRangeError("2026-09-01", "2026-09-30"), "");
+  assert.match(recordDateRangeError("2026-02-30", ""), /開始日期不是有效日期/);
+  assert.match(recordDateRangeError("", "2026-13-01"), /結束日期不是有效日期/);
+  assert.match(recordDateRangeError("2026-09-30", "2026-09-01"), /開始日期不可遲於結束日期/);
 });
 test("direct closure keeps existing history; editing closed records does not add closure", () => {
   const source={status:"跟進中",followUps:[{note:"已跟進"}],closureHistory:[{id:"old",summary:"上次結案"}]};

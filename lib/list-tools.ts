@@ -2,6 +2,21 @@ import type { Entry, Student } from "./conduct-types";
 
 export const ALL_CLASSES = "全部班級";
 export const normalizeSearch = (value: string) => value.normalize("NFKC").trim().toLocaleLowerCase("zh-Hant");
+
+const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+
+function isValidIsoDate(value: string) {
+  if (!ISO_DATE_PATTERN.test(value)) return false;
+  const parsed = new Date(`${value}T00:00:00.000Z`);
+  return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
+}
+
+export function recordDateRangeError(dateFrom: string, dateTo: string) {
+  if (dateFrom && !isValidIsoDate(dateFrom)) return "開始日期不是有效日期。";
+  if (dateTo && !isValidIsoDate(dateTo)) return "結束日期不是有效日期。";
+  if (dateFrom && dateTo && dateFrom > dateTo) return "開始日期不可遲於結束日期。";
+  return "";
+}
 export function matchesStudent(student: Student, query: string, className = ALL_CLASSES) {
   return (className === ALL_CLASSES || student.className === className) &&
     normalizeSearch([student.name, student.className, student.number].join(" ")).includes(normalizeSearch(query));

@@ -30,6 +30,16 @@ test("獎懲紀錄 CSV 可由 Excel 開啟並完整匯出再匯入", () => {
   assert.deepEqual(imported, [entry]);
 });
 
+test("篩選匯出沿用原有 CSV 欄位及歷史序列化", () => {
+  const excluded = { ...entry, id: "r-excluded", note: "不符合目前篩選" };
+  const exportedAt = new Date("2026-09-24T00:00:00.000Z");
+  const completeHeader = serializeRecordCsv([entry, excluded], students, exportedAt).split("\r\n", 1)[0];
+  const filtered = serializeRecordCsv([entry], students, exportedAt);
+  assert.equal(filtered.split("\r\n", 1)[0], completeHeader);
+  assert.deepEqual(parseRecordCsv(filtered, students), [entry]);
+  assert.doesNotMatch(filtered, /r-excluded/);
+});
+
 test("JSON 備份仍可匯入", () => {
   const text = serializeRecordExport([entry], new Date("2026-09-24T00:00:00.000Z"));
   const imported = parseRecordImport(text, new Set(["s1"]));

@@ -7,7 +7,7 @@ import { CONDUCT_RULES, resolveRuleSelection, ruleRecordFields, type RuleInput }
 import { RuleDetails, RulePicker } from "../components/rule-picker";
 import { completeCase, DIRECT_CLOSURE_REASON } from "../lib/case-workflow";
 import type { Student, Entry, FollowUp, Kind, Status } from "../lib/conduct-types";
-import { compareRecordUpdatedDesc, duplicateStudentIds, matchesStudent, normalizeSearch, recordSearchText, scoreLabel, studentSearchRank, toggleSelection } from "../lib/list-tools";
+import { compareRecordUpdatedDesc, duplicateStudentIds, matchesStudent, normalizeSearch, recordDateRangeError, recordSearchText, scoreLabel, studentSearchRank, toggleSelection } from "../lib/list-tools";
 import { ListPagination, useListPage, type ListPage } from "../components/list-pagination";
 import { StudentPicker } from "../components/student-picker";
 import { MAX_RECORD_IMPORT_BYTES, RECORD_IMPORT_SIZE_ERROR, mergeRecordImports, parseRecordCsv, parseRecordImport, serializeRecordCsv } from "../lib/record-transfer";
@@ -351,7 +351,8 @@ function Workspace({ students, initialEntries, largeFixture }: { students: Stude
   const compareStudentClass = (a: Student, b: Student) =>
     (classOrder.get(a.className) ?? 999) - (classOrder.get(b.className) ?? 999) || Number(a.seat) - Number(b.seat) || a.name.localeCompare(b.name, "zh-Hant");
   const recordQuery = normalizeSearch(recordSearch);
-  const recordDateRangeInvalid = Boolean(recordDateFrom && recordDateTo && recordDateFrom > recordDateTo);
+  const recordDateError = recordDateRangeError(recordDateFrom, recordDateTo);
+  const recordDateRangeInvalid = Boolean(recordDateError);
   const shownEntries = entries.filter((e) => {
     const student = studentMap.get(e.studentId);
     const searchable = recordSearchText(e, student);
@@ -470,16 +471,26 @@ function Workspace({ students, initialEntries, largeFixture }: { students: Stude
     setBulkUpdateUndo(null);
   }
   function exportRecords() {
-    const blob = new Blob([serializeRecordCsv(entries, students)], { type: "text/csv;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `campus-conduct-records-${today}.csv`;
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    window.setTimeout(() => URL.revokeObjectURL(url), 0);
-    setRecordTransferMessage({ tone: "success", text: `已匯出全部 ${entries.length.toLocaleString()} 筆紀錄為 CSV；檔案包含最後修改時間、跟進及結案歷史。` });
+    if (recordDateError) {
+      setRecordFiltersOpen(true);
+      setRecordTransferMessage({ tone: "error", text: `無法匯出 CSV：${recordDateError} 請先修正進階篩選的紀錄日期。` });
+      return;
+    }
+    try {
+      const blob = new Blob([serializeRecordCsv(shownEntries, students)], { type: "text/csv;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `campus-conduct-records-${today}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 0);
+      const scope = recordActiveFilters.length ? `符合目前篩選的 ${shownEntries.length.toLocaleString()}` : `全部 ${entries.length.toLocaleString()}`;
+      setRecordTransferMessage({ tone: "success", text: `已匯出${scope}筆紀錄為 CSV；檔案包含最後修改時間、跟進及結案歷史。` });
+    } catch (error) {
+      setRecordTransferMessage({ tone: "error", text: error instanceof Error ? error.message : "無法匯出這些紀錄。" });
+    }
   }
   async function importRecords(event: ChangeEvent<HTMLInputElement>) {
     const input = event.currentTarget;
@@ -784,7 +795,7 @@ function Workspace({ students, initialEntries, largeFixture }: { students: Stude
           assigneeFilter={recordAssigneeFilter}
           dateFrom={recordDateFrom}
           dateTo={recordDateTo}
-          dateRangeInvalid={recordDateRangeInvalid}
+          dateRangeError={recordDateError}
           sort={recordSort}
           filtersOpen={recordFiltersOpen}
           activeFilters={recordActiveFilters}
@@ -1198,7 +1209,7 @@ function FilterSummary({ labels, onReset }: { labels: string[]; onReset: () => v
   </div>;
 }
 
-function RecordsDirectory({ entries, totalCount, pagination, studentMap, search, classFilter, kindFilter, categoryFilter, statusFilter, assigneeFilter, dateFrom, dateTo, dateRangeInvalid, sort, filtersOpen, activeFilters, classes, categories: recordCategories, assignees, selectedIds, allVisibleSelected, onSearch, onClassFilterChange, onKindFilterChange, onCategoryFilterChange, onStatusFilterChange, onAssigneeFilterChange, onDateFromChange, onDateToChange, onSortChange, onFiltersOpenChange, onReset, onOpenCase, onToggleSelection, onToggleVisible, onClearSelection, onBulkUpdate }: {
+function RecordsDirectory({ entries, totalCount, pagination, studentMap, search, classFilter, kindFilter, categoryFilter, statusFilter, assigneeFilter, dateFrom, dateTo, dateRangeError, sort, filtersOpen, activeFilters, classes, categories: recordCategories, assignees, selectedIds, allVisibleSelected, onSearch, onClassFilterChange, onKindFilterChange, onCategoryFilterChange, onStatusFilterChange, onAssigneeFilterChange, onDateFromChange, onDateToChange, onSortChange, onFiltersOpenChange, onReset, onOpenCase, onToggleSelection, onToggleVisible, onClearSelection, onBulkUpdate }: {
   entries: Entry[];
   pagination: ListPage;
   totalCount: number;
@@ -1211,7 +1222,7 @@ function RecordsDirectory({ entries, totalCount, pagination, studentMap, search,
   assigneeFilter: string;
   dateFrom: string;
   dateTo: string;
-  dateRangeInvalid: boolean;
+  dateRangeError: string;
   sort: RecordSort;
   filtersOpen: boolean;
   activeFilters: string[];
@@ -1260,7 +1271,7 @@ function RecordsDirectory({ entries, totalCount, pagination, studentMap, search,
         <label className="filter-field"><span>負責人</span><select value={assigneeFilter} onChange={(event) => onAssigneeFilterChange(event.target.value)}>{assignees.map((item) => <option value={item} key={item}>{assigneeOptionLabel(item)}</option>)}</select></label>
         <div className="date-range-group"><span>紀錄日期</span><div><label><span className="sr-only">開始日期</span><input type="date" value={dateFrom} max={dateTo || undefined} onChange={(event) => onDateFromChange(event.target.value)}/></label><i>至</i><label><span className="sr-only">結束日期</span><input type="date" value={dateTo} min={dateFrom || undefined} onChange={(event) => onDateToChange(event.target.value)}/></label></div></div>
       </div>
-      {dateRangeInvalid && <p className="filter-error" role="alert">開始日期不可遲於結束日期；修正前暫不套用日期條件。</p>}
+      {dateRangeError && <p className="filter-error" role="alert">{dateRangeError} 修正前暫不套用日期條件，亦不能匯出 CSV。</p>}
     </div>}
     <div className="persistent-filters"><label className="filter-field"><span>班級</span><select value={classFilter} onChange={(event) => onClassFilterChange(event.target.value)}>{classes.map((item) => <option key={item}>{item}</option>)}</select></label><label className="filter-field"><span>校本範疇</span><select value={kindFilter} onChange={(event) => onKindFilterChange(event.target.value)}><option>全部範疇</option>{SCHOOL_CATEGORIES.map((category) => <option key={category}>{category}</option>)}</select></label><label className="filter-field"><span>個案狀態</span><select value={statusFilter} onChange={(event) => onStatusFilterChange(event.target.value)}><option>全部狀態</option><option>待跟進</option><option>跟進中</option><option>已結案</option></select></label></div>
     <FilterSummary labels={activeFilters} onReset={onReset}/>
