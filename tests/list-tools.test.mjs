@@ -74,9 +74,9 @@ test("last modified sort uses updatedAt rather than the record or activity date"
 test("record export date range rejects invalid dates separately", () => {
   assert.equal(recordDateRangeError("", ""), "");
   assert.equal(recordDateRangeError("2026-09-01", "2026-09-30"), "");
-  assert.match(recordDateRangeError("2026-02-30", ""), /開始日期不是有效日期/);
-  assert.match(recordDateRangeError("", "2026-13-01"), /結束日期不是有效日期/);
-  assert.match(recordDateRangeError("2026-09-30", "2026-09-01"), /開始日期不可遲於結束日期/);
+  assert.match(recordDateRangeError("2026-02-30", ""), /「開始日期」不是有效日期/);
+  assert.match(recordDateRangeError("", "2026-13-01"), /「結束日期」不是有效日期/);
+  assert.match(recordDateRangeError("2026-09-30", "2026-09-01"), /日期範圍有誤/);
 });
 test("direct closure keeps existing history; editing closed records does not add closure", () => {
   const source={status:"跟進中",followUps:[{note:"已跟進"}],closureHistory:[{id:"old",summary:"上次結案"}]};

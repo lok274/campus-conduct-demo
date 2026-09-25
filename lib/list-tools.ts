@@ -12,9 +12,9 @@ function isValidIsoDate(value: string) {
 }
 
 export function recordDateRangeError(dateFrom: string, dateTo: string) {
-  if (dateFrom && !isValidIsoDate(dateFrom)) return "開始日期不是有效日期。";
-  if (dateTo && !isValidIsoDate(dateTo)) return "結束日期不是有效日期。";
-  if (dateFrom && dateTo && dateFrom > dateTo) return "開始日期不可遲於結束日期。";
+  if (dateFrom && !isValidIsoDate(dateFrom)) return "「開始日期」不是有效日期，請重新選擇。";
+  if (dateTo && !isValidIsoDate(dateTo)) return "「結束日期」不是有效日期，請重新選擇。";
+  if (dateFrom && dateTo && dateFrom > dateTo) return "日期範圍有誤：「開始日期」不可遲於「結束日期」。";
   return "";
 }
 export function matchesStudent(student: Student, query: string, className = ALL_CLASSES) {
