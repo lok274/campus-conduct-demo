@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type ChangeEvent, type FormEvent, type KeyboardEvent as ReactKeyboardEvent, type RefObject } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type FormEvent, type KeyboardEvent as ReactKeyboardEvent, type RefObject } from "react";
 import { ArrowRight, ArrowUpDown, BookOpenCheck, CalendarDays, Check, CheckCircle2, ChevronDown, ChevronRight, ClipboardList, Clock3, Download, FilePenLine, Filter, LayoutDashboard, Menu, Plus, RotateCcw, Search, ShieldCheck, SlidersHorizontal, Sparkles, Upload, UsersRound, X } from "lucide-react";
 import { SCHOOL_BASE_SCORES, SCHOOL_CATEGORIES, type SchoolCategory } from "../lib/school-rules";
 import { CONDUCT_RULES, resolveRuleSelection, ruleRecordFields, type RuleInput } from "../lib/conduct-rules";
@@ -215,6 +215,34 @@ function Workspace({ students, initialEntries, largeFixture }: { students: Stude
     batchDraft.date !== today || !batchDraft.needsFollowUp ||
     batchDraft.assignee.trim() !== "" || batchDraft.dueDate !== "";
 
+  const persistCreateDraft = useCallback(() => {
+    try {
+      if (!batchHasChanges) {
+        window.localStorage.removeItem(CREATE_DRAFT_STORAGE_KEY);
+        setBatchDraftStatus("");
+        return;
+      }
+      const stored: StoredCreateDraft = {
+        draft: batchDraft,
+        studentIds: batchStudentIds,
+        step: batchStep === "students" ? "students" : "details",
+        classFilter: batchClassFilter,
+        skipDuplicates: batchSkipDuplicates,
+        savedAt: new Date().toISOString(),
+      };
+      window.localStorage.setItem(CREATE_DRAFT_STORAGE_KEY, JSON.stringify(stored));
+      setBatchDraftStatus("草稿已自動儲存 · 只限這個瀏覽器");
+    } catch {
+      setBatchDraftStatus("無法自動儲存草稿，請保持此頁開啟");
+    }
+  }, [batchClassFilter, batchDraft, batchHasChanges, batchSkipDuplicates, batchStep, batchStudentIds]);
+
+  const closeCreateForm = useCallback((persistDraft = true) => {
+    if (persistDraft) persistCreateDraft();
+    setBatchFormOpen(false); setBatchStep("students"); setBatchError("");
+    window.setTimeout(() => createButtonRef.current?.focus(), 0);
+  }, [persistCreateDraft]);
+
   useEffect(() => {
     if (!notice) return;
     const timer = window.setTimeout(() => { setNotice(""); setUndoBatch(null); }, 5200);
@@ -222,29 +250,9 @@ function Workspace({ students, initialEntries, largeFixture }: { students: Stude
   }, [notice, undoBatch?.id]);
   useEffect(() => {
     if (!batchFormOpen) return;
-    if (!batchHasChanges) {
-      window.localStorage.removeItem(CREATE_DRAFT_STORAGE_KEY);
-      setBatchDraftStatus("");
-      return;
-    }
-    const timer = window.setTimeout(() => {
-      try {
-        const stored: StoredCreateDraft = {
-          draft: batchDraft,
-          studentIds: batchStudentIds,
-          step: batchStep === "students" ? "students" : "details",
-          classFilter: batchClassFilter,
-          skipDuplicates: batchSkipDuplicates,
-          savedAt: new Date().toISOString(),
-        };
-        window.localStorage.setItem(CREATE_DRAFT_STORAGE_KEY, JSON.stringify(stored));
-        setBatchDraftStatus("草稿已自動儲存 · 只限這個瀏覽器");
-      } catch {
-        setBatchDraftStatus("無法自動儲存草稿，請保持此頁開啟");
-      }
-    }, 300);
+    const timer = window.setTimeout(persistCreateDraft, 300);
     return () => window.clearTimeout(timer);
-  }, [batchFormOpen, batchHasChanges, batchDraft, batchStudentIds, batchStep, batchClassFilter, batchSkipDuplicates]);
+  }, [batchFormOpen, persistCreateDraft]);
   useEffect(() => {
     let timer = 0;
     const scheduleNextDay = () => {
@@ -263,8 +271,7 @@ function Workspace({ students, initialEntries, largeFixture }: { students: Stude
           setBulkUpdateOpen(false); setBulkUpdateStep("edit"); setBulkUpdateError("");
         }
         else if (batchFormOpen) {
-          setBatchFormOpen(false); setBatchStep("students"); setBatchError("");
-          window.setTimeout(() => createButtonRef.current?.focus(), 0);
+          closeCreateForm();
         }
         else if (formOpen) { setFormOpen(false); if (formReturnCaseId) setCaseId(formReturnCaseId); setFormReturnCaseId(null); }
         else if (caseId) { setCaseId(null); setStudentId(caseReturnStudentId); setCaseReturnStudentId(null); }
@@ -273,7 +280,7 @@ function Workspace({ students, initialEntries, largeFixture }: { students: Stude
     };
     window.addEventListener("keydown", close);
     return () => window.removeEventListener("keydown", close);
-  }, [formOpen, formReturnCaseId, batchFormOpen, batchHasChanges, bulkUpdateOpen, studentId, caseId, caseReturnStudentId]);
+  }, [formOpen, formReturnCaseId, batchFormOpen, bulkUpdateOpen, studentId, caseId, caseReturnStudentId, closeCreateForm]);
   useEffect(() => {
     const openWithShortcut = (event: KeyboardEvent) => {
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
@@ -534,10 +541,6 @@ function Workspace({ students, initialEntries, largeFixture }: { students: Stude
     setBatchDraftStatus(stored ? "已恢復上次草稿 · 只限這個瀏覽器" : "");
     setStudentId(null); setCaseId(null); setCaseReturnStudentId(null); setFormOpen(false); setBatchFormOpen(true);
   }
-  function closeCreateForm() {
-    setBatchFormOpen(false); setBatchStep("students"); setBatchError("");
-    window.setTimeout(() => createButtonRef.current?.focus(), 0);
-  }
   function toggleCreateStudent(id: string) {
     setBatchStudentIds((current) => current.includes(id) ? current.filter((studentId) => studentId !== id) : [...current, id]);
     setBatchError("");
@@ -591,7 +594,7 @@ function Workspace({ students, initialEntries, largeFixture }: { students: Stude
     setBatchDraftStatus("");
     setUndoBatch({ id: batchId, count: createdEntries.length });
     setNotice(`已建立 ${createdEntries.length} 筆訓育紀錄`);
-    closeCreateForm(); resetRecordFilters(); setRecordSort("date-desc"); navigate("records");
+    closeCreateForm(false); resetRecordFilters(); setRecordSort("date-desc"); navigate("records");
   }
   function undoLastBatch() {
     if (!undoBatch) return;
