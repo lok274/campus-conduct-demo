@@ -1,13 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type FormEvent, type KeyboardEvent as ReactKeyboardEvent, type RefObject } from "react";
-import { ArrowRight, ArrowUpDown, BookOpenCheck, CalendarDays, Check, CheckCircle2, ChevronDown, ChevronRight, ClipboardList, Clock3, Download, FilePenLine, Filter, LayoutDashboard, Menu, Plus, RotateCcw, Search, ShieldCheck, SlidersHorizontal, Sparkles, Upload, UsersRound, X } from "lucide-react";
+import { ArrowRight, ArrowUpDown, BookOpenCheck, CalendarDays, Check, CheckCircle2, ChevronDown, ChevronRight, ClipboardList, Clock3, Download, FilePenLine, Filter, LayoutDashboard, Menu, Plus, RotateCcw, Search, ShieldCheck, SlidersHorizontal, Sparkles, Trash2, Upload, UsersRound, X } from "lucide-react";
 import { SCHOOL_BASE_SCORES, SCHOOL_CATEGORIES, type SchoolCategory } from "../lib/school-rules";
 import { CONDUCT_RULES, resolveRule, resolveRuleSelection, ruleRecordFields, type RuleInput } from "../lib/conduct-rules";
 import { RuleDetails, RulePicker, type RulePickerErrors } from "../components/rule-picker";
 import { canEditCaseDetails, completeCase, DIRECT_CLOSURE_REASON } from "../lib/case-workflow";
 import type { Student, Entry, FollowUp, Kind, Status } from "../lib/conduct-types";
-import { compareRecordUpdatedDesc, duplicateStudentIds, matchesStudent, normalizeSearch, recordDateRangeError, recordSearchText, scoreLabel, studentSearchRank, toggleSelection } from "../lib/list-tools";
+import { compareRecordUpdatedDesc, duplicateStudentIds, matchesStudent, normalizeSearch, recordDateRangeError, recordSearchText, removeSelectedRecords, scoreLabel, studentSearchRank, toggleSelection } from "../lib/list-tools";
 import { ListPagination, useListPage, type ListPage } from "../components/list-pagination";
 import { MAX_RECORD_IMPORT_BYTES, RECORD_IMPORT_SIZE_ERROR, mergeRecordImports, parseRecordCsv, parseRecordImport, serializeRecordCsv } from "../lib/record-transfer";
 import { applyBulkRecordUpdate, bulkRecordWouldChange, hasBulkRecordUpdate, restoreBulkRecordUpdate, type BulkRecordUpdate } from "../lib/bulk-record-update";
@@ -248,6 +248,7 @@ function Workspace({ students, initialEntries, largeFixture }: { students: Stude
   const [bulkUpdateDraft, setBulkUpdateDraft] = useState<BulkRecordUpdate>(newBulkRecordUpdate);
   const [bulkUpdateErrors, setBulkUpdateErrors] = useState<BulkFieldErrors>({});
   const [bulkUpdateUndo, setBulkUpdateUndo] = useState<BulkUpdateUndo | null>(null);
+  const [deleteRecordsOpen, setDeleteRecordsOpen] = useState(false);
   const [today, setToday] = useState(currentLocalDate);
   const createButtonRef = useRef<HTMLButtonElement>(null);
   const recordImportInputRef = useRef<HTMLInputElement>(null);
@@ -314,10 +315,12 @@ function Workspace({ students, initialEntries, largeFixture }: { students: Stude
     return () => window.clearTimeout(timer);
   }, []);
   useEffect(() => {
-    if (!formOpen && !batchFormOpen && !bulkUpdateOpen && !pendingRecordImport && !studentId && !caseId) return;
+    if (!formOpen && !batchFormOpen && !bulkUpdateOpen && !deleteRecordsOpen && !pendingRecordImport && !studentId && !caseId) return;
     const close = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
-        if (pendingRecordImport) {
+        if (deleteRecordsOpen) {
+          setDeleteRecordsOpen(false);
+        } else if (pendingRecordImport) {
           setPendingRecordImport(null);
         }
         else if (bulkUpdateOpen) {
@@ -335,12 +338,12 @@ function Workspace({ students, initialEntries, largeFixture }: { students: Stude
     };
     window.addEventListener("keydown", close);
     return () => window.removeEventListener("keydown", close);
-  }, [formOpen, formReturnCaseId, batchFormOpen, bulkUpdateOpen, pendingRecordImport, studentId, caseId, caseReturnStudentId, closeCreateForm]);
+  }, [formOpen, formReturnCaseId, batchFormOpen, bulkUpdateOpen, deleteRecordsOpen, pendingRecordImport, studentId, caseId, caseReturnStudentId, closeCreateForm]);
   useEffect(() => {
     const openWithShortcut = (event: KeyboardEvent) => {
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
         event.preventDefault();
-        if (formOpen || batchFormOpen || bulkUpdateOpen || pendingRecordImport || studentId || caseId) return;
+        if (formOpen || batchFormOpen || bulkUpdateOpen || deleteRecordsOpen || pendingRecordImport || studentId || caseId) return;
         setGlobalSearchOpen(true); globalSearchInputRef.current?.focus();
       }
     };
@@ -353,9 +356,9 @@ function Workspace({ students, initialEntries, largeFixture }: { students: Stude
       window.removeEventListener("keydown", openWithShortcut);
       window.removeEventListener("pointerdown", closeWhenOutside);
     };
-  }, [formOpen, batchFormOpen, bulkUpdateOpen, pendingRecordImport, studentId, caseId]);
+  }, [formOpen, batchFormOpen, bulkUpdateOpen, deleteRecordsOpen, pendingRecordImport, studentId, caseId]);
 
-  const modalOpen = formOpen || batchFormOpen || bulkUpdateOpen || !!pendingRecordImport || !!studentId || !!caseId;
+  const modalOpen = formOpen || batchFormOpen || bulkUpdateOpen || deleteRecordsOpen || !!pendingRecordImport || !!studentId || !!caseId;
   useEffect(() => {
     if (!modalOpen) return;
     const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
@@ -376,7 +379,7 @@ function Workspace({ students, initialEntries, largeFixture }: { students: Stude
   useEffect(() => {
     if (!modalOpen) return;
     document.querySelector<HTMLElement>('.overlay [role="dialog"] button')?.focus({ preventScroll: true });
-  }, [modalOpen, formOpen, batchFormOpen, bulkUpdateOpen, pendingRecordImport, studentId, caseId]);
+  }, [modalOpen, formOpen, batchFormOpen, bulkUpdateOpen, deleteRecordsOpen, pendingRecordImport, studentId, caseId]);
 
   const studentMap = useMemo(() => new Map(students.map((s) => [s.id, s])), [students]);
   const classes = ["全部班級", ...new Set(students.map((s) => s.className))];
@@ -491,6 +494,22 @@ function Workspace({ students, initialEntries, largeFixture }: { students: Stude
   }
   function closeBulkUpdate() {
     setBulkUpdateOpen(false); setBulkUpdateStep("edit"); setBulkUpdateErrors({});
+  }
+  function openDeleteRecords() {
+    if (selectedRecordEntries.length) setDeleteRecordsOpen(true);
+  }
+  function confirmDeleteRecords() {
+    const result = removeSelectedRecords(entries, recordSelectedIdSet);
+    setDeleteRecordsOpen(false);
+    setRecordSelectedIds([]);
+    setBulkUpdateUndo(null);
+    setUndoBatch(null);
+    if (!result.removedCount) {
+      setNotice("找不到原先選取的紀錄，沒有刪除任何資料");
+      return;
+    }
+    setEntries(result.entries);
+    setNotice(`已刪除 ${result.removedCount} 筆紀錄`);
   }
   function reviewBulkUpdate(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -887,6 +906,7 @@ function Workspace({ students, initialEntries, largeFixture }: { students: Stude
           onToggleVisible={toggleVisibleRecords}
           onClearSelection={() => setRecordSelectedIds([])}
           onBulkUpdate={openBulkUpdate}
+          onDelete={openDeleteRecords}
         />}
         <footer>校園訓育系統 · 前端介面示範 <span>所有學生及紀錄均為虛構資料</span></footer>
       </main>
@@ -959,8 +979,25 @@ function Workspace({ students, initialEntries, largeFixture }: { students: Stude
       onBack={() => { setBulkUpdateStep("edit"); setBulkUpdateErrors({}); }}
       onConfirm={confirmBulkUpdate}
     />}
+    {deleteRecordsOpen && <DeleteRecordsPanel entries={selectedRecordEntries} onClose={() => setDeleteRecordsOpen(false)} onConfirm={confirmDeleteRecords}/>}
     {selectedCase && caseStudent && <CasePanel key={selectedCase.id} entry={selectedCase} student={caseStudent} onClose={closeCaseView} onEdit={() => editEntry(selectedCase)} onSavePlan={saveCasePlan} onStart={startCase} onAddFollowUp={addFollowUp} onCloseCase={closeCase} onReopen={reopenCase}/>}
     {notice && <div className="toast" role="status"><CheckCircle2 size={18}/>{notice}{undoBatch && notice === `已建立 ${undoBatch.count} 筆訓育紀錄` && <button type="button" className="toast-action" onClick={undoLastBatch}>復原</button>}<button type="button" aria-label="關閉通知" onClick={() => { setNotice(""); setUndoBatch(null); }}><X size={14}/></button></div>}
+  </div>;
+}
+
+function DeleteRecordsPanel({ entries, onClose, onConfirm }: { entries: Entry[]; onClose: () => void; onConfirm: () => void }) {
+  const counts: Record<Status, number> = { "待跟進": 0, "跟進中": 0, "已結案": 0 };
+  for (const entry of entries) counts[entry.status] += 1;
+  return <div className="overlay" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
+    <section className="panel delete-records-panel" role="dialog" aria-modal="true" aria-labelledby="delete-records-title" aria-describedby="delete-records-description">
+      <div className="panel-head"><div><small>DELETE RECORDS</small><h2 id="delete-records-title">確認刪除紀錄</h2></div><button type="button" aria-label="關閉刪除確認" onClick={onClose}><X size={20}/></button></div>
+      <div className="panel-body delete-records-body">
+        <div className="delete-records-warning"><Trash2 size={22}/><span><strong>即將刪除 {entries.length.toLocaleString()} 筆紀錄</strong><p id="delete-records-description">請核對數量及狀態。確認後，相關事項、跟進記錄及結案資料會一併移除。</p></span></div>
+        <dl className="delete-records-summary"><div><dt>待跟進</dt><dd>{counts["待跟進"].toLocaleString()}</dd></div><div><dt>跟進中</dt><dd>{counts["跟進中"].toLocaleString()}</dd></div><div><dt>已結案</dt><dd>{counts["已結案"].toLocaleString()}</dd></div></dl>
+        <p className="delete-records-note"><ShieldCheck size={17}/><span><strong>此操作不可復原。</strong> 若不確定，請按「取消」返回紀錄清單重新核對。</span></p>
+      </div>
+      <div className="panel-foot"><button type="button" className="btn secondary" onClick={onClose}>取消</button><button type="button" className="btn danger" onClick={onConfirm} disabled={!entries.length}><Trash2 size={16}/>確認刪除 {entries.length.toLocaleString()} 筆</button></div>
+    </section>
   </div>;
 }
 
@@ -1349,7 +1386,7 @@ function FollowUpCalendar({ entries, studentMap, today, onOpenCase }: {
   </section>;
 }
 
-function RecordsDirectory({ entries, totalCount, pagination, studentMap, search, classFilter, kindFilter, categoryFilter, statusFilter, assigneeFilter, dateFrom, dateTo, dateRangeError, sort, filtersOpen, activeFilters, classes, categories: recordCategories, assignees, selectedIds, allVisibleSelected, onSearch, onClassFilterChange, onKindFilterChange, onCategoryFilterChange, onStatusFilterChange, onAssigneeFilterChange, onDateFromChange, onDateToChange, onSortChange, onFiltersOpenChange, onReset, onOpenCase, onToggleSelection, onToggleVisible, onClearSelection, onBulkUpdate }: {
+function RecordsDirectory({ entries, totalCount, pagination, studentMap, search, classFilter, kindFilter, categoryFilter, statusFilter, assigneeFilter, dateFrom, dateTo, dateRangeError, sort, filtersOpen, activeFilters, classes, categories: recordCategories, assignees, selectedIds, allVisibleSelected, onSearch, onClassFilterChange, onKindFilterChange, onCategoryFilterChange, onStatusFilterChange, onAssigneeFilterChange, onDateFromChange, onDateToChange, onSortChange, onFiltersOpenChange, onReset, onOpenCase, onToggleSelection, onToggleVisible, onClearSelection, onBulkUpdate, onDelete }: {
   entries: Entry[];
   pagination: ListPage;
   totalCount: number;
@@ -1387,6 +1424,7 @@ function RecordsDirectory({ entries, totalCount, pagination, studentMap, search,
   onToggleVisible: () => void;
   onClearSelection: () => void;
   onBulkUpdate: () => void;
+  onDelete: () => void;
 }) {
   const advancedCount = Number(categoryFilter !== "全部事項") + Number(assigneeFilter !== ALL_ASSIGNEES) + Number(Boolean(dateFrom)) + Number(Boolean(dateTo));
   return <section className="card table-card">
@@ -1399,7 +1437,7 @@ function RecordsDirectory({ entries, totalCount, pagination, studentMap, search,
         </select></label>
         <button type="button" className={"advanced-toggle" + (filtersOpen ? " active" : "")} aria-expanded={filtersOpen} aria-controls="record-advanced-filters" onClick={() => onFiltersOpenChange(!filtersOpen)}><SlidersHorizontal size={15}/>進階篩選{advancedCount > 0 && <b>{advancedCount}</b>}</button>
       </div>
-      {selectedIds.size > 0 && <div className="record-selection-toolbar" role="status"><span><strong>已選 {selectedIds.size.toLocaleString()} 筆紀錄</strong><small>可跨頁及篩選保留選取</small></span><div><button type="button" className="btn secondary" onClick={onClearSelection}>清除選取</button><button type="button" className="btn primary" onClick={onBulkUpdate}>批次更新</button></div></div>}
+      {selectedIds.size > 0 && <div className="record-selection-toolbar" role="status"><span><strong>已選 {selectedIds.size.toLocaleString()} 筆紀錄</strong><small>可跨頁及篩選保留選取</small></span><div><button type="button" className="btn secondary" onClick={onClearSelection}>清除選取</button><button type="button" className="btn primary" onClick={onBulkUpdate}>批次更新</button><button type="button" className="btn danger" onClick={onDelete}><Trash2 size={15}/>刪除紀錄</button></div></div>}
     </div>
     {filtersOpen && <div className="advanced-filter-panel" id="record-advanced-filters">
       <div className="advanced-filter-head"><div><strong>篩選訓育紀錄</strong><span>所有條件會同時套用</span></div><button type="button" onClick={onReset}><RotateCcw size={14}/>重設</button></div>

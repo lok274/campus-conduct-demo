@@ -42,6 +42,10 @@ export function toggleSelection<T extends { id: string }>(current: string[], vis
   return visible.length && visible.every(item => selected.has(item.id))
     ? current.filter(id => !ids.has(id)) : [...new Set([...current, ...ids])];
 }
+export function removeSelectedRecords<T extends { id: string }>(entries: readonly T[], selectedIds: ReadonlySet<string>) {
+  const removed = entries.filter((entry) => selectedIds.has(entry.id));
+  return { entries: entries.filter((entry) => !selectedIds.has(entry.id)), removed, removedCount: removed.length };
+}
 export function duplicateStudentIds(entries: Entry[], expected: Pick<Entry, "date" | "kind" | "category" | "rule" | "scoreChange" | "note">) {
   const note = (value: string) => value.trim().replace(/\s+/g, " ");
   return new Set(entries.filter(entry => entry.date === expected.date && entry.kind === expected.kind &&

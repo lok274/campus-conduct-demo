@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { performance } from "node:perf_hooks";
 import { createLargeSchool } from "./fixtures/large-school.ts";
-import { compareRecordUpdatedDesc, matchesStudent, normalizeSearch, recordDateRangeError, recordSearchText, pageWindow, toggleSelection, duplicateStudentIds, scoreLabel, studentSearchRank } from "../lib/list-tools.ts";
+import { compareRecordUpdatedDesc, matchesStudent, normalizeSearch, recordDateRangeError, recordSearchText, pageWindow, toggleSelection, duplicateStudentIds, removeSelectedRecords, scoreLabel, studentSearchRank } from "../lib/list-tools.ts";
 import { canEditCaseDetails, completeCase } from "../lib/case-workflow.ts";
 
 const { students, entries } = createLargeSchool();
@@ -47,6 +47,18 @@ test("cross-page/class selection does not erase previous selections", () => {
   assert.equal(ids.length,50); assert.ok(ids.includes("test-s1")); assert.ok(ids.includes("test-s165"));
   assert.ok(!ids.includes("test-s26"));
   assert.ok(!ids.includes("test-s840"));
+});
+test("selected records can be removed regardless of case status", () => {
+  const source = [
+    { id: "waiting", status: "待跟進" },
+    { id: "progress", status: "跟進中" },
+    { id: "closed", status: "已結案" },
+    { id: "kept", status: "待跟進" },
+  ];
+  const result = removeSelectedRecords(source, new Set(["waiting", "progress", "closed"]));
+  assert.deepEqual(result.entries.map((entry) => entry.id), ["kept"]);
+  assert.deepEqual(result.removed.map((entry) => entry.status), ["待跟進", "跟進中", "已結案"]);
+  assert.equal(result.removedCount, 3);
 });
 test("duplicate detection checks whole dataset, preserves zero and rule scope", () => {
   const expected={date:"2026-09-22",kind:"守規",category:"測試事項",note:"相同  內容",scoreChange:0,rule:{code:"1",category:"守規"}};
